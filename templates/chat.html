@@ -19,9 +19,6 @@
                 </div>
                 
                 <div class="card-body bg-light" id="chat-container" style="height: 400px; overflow-y: auto;">
-                    <div class="text-center text-muted small my-3">
-                        -- 这是一个临时会话，记录保存在您的本地浏览器中 --
-                    </div>
                     <!-- 消息列表 -->
                     <div id="messages-area"></div>
                 </div>
@@ -56,23 +53,8 @@
         var chatContainer = document.getElementById('chat-container');
         var messageInput = document.getElementById('message-input');
         
-        // 1. 本地存储Key
-        var storageKey = 'auction_chat_' + roomId;
-        
-        // 2. 加载历史消息
-        function loadHistory() {
-            var history = localStorage.getItem(storageKey);
-            if (history) {
-                var messages = JSON.parse(history);
-                messages.forEach(function(msg) {
-                    appendMessage(msg, false); // false = 不要再次保存
-                });
-                scrollToBottom();
-            }
-        }
-        
-        // 3. 渲染消息
-        function appendMessage(data, saveToLocal) {
+        // 1. 渲染消息
+        function appendMessage(data) {
             var isMe = (data.sender_id == currentUserId);
             var alignClass = isMe ? 'justify-content-end' : 'justify-content-start';
             var bgClass = isMe ? 'bg-primary text-white' : 'bg-white border text-dark';
@@ -93,24 +75,22 @@
             `;
             
             messagesArea.insertAdjacentHTML('beforeend', msgHtml);
-            
-            if (saveToLocal) {
-                var history = JSON.parse(localStorage.getItem(storageKey) || '[]');
-                history.push(data);
-                localStorage.setItem(storageKey, JSON.stringify(history));
-            }
         }
         
         function scrollToBottom() {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
         
-        // 4. 初始化
-        loadHistory();
+        // 2. 加载服务器历史
+        var serverHistory = {{ messages|tojson }};
+        if (Array.isArray(serverHistory)) {
+            serverHistory.forEach(function(m){ appendMessage(m); });
+            scrollToBottom();
+        }
         
         socket.emit('join_chat', {room: roomId});
         
-        // 5. 发送消息
+        // 3. 发送消息
         document.getElementById('chat-form').addEventListener('submit', function(e) {
             e.preventDefault();
             var msg = messageInput.value.trim();
@@ -128,9 +108,9 @@
             messageInput.value = '';
         });
         
-        // 6. 接收消息
+        // 4. 接收消息
         socket.on('new_message', function(data) {
-            appendMessage(data, true);
+            appendMessage(data);
             scrollToBottom();
         });
     });
