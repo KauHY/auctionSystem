@@ -68,6 +68,15 @@
                     </div>
                     <div class="form-text">每次加价幅度: ¥{{ item.increment }}</div>
                 </div>
+                {% elif current_user.is_authenticated and current_user.role == 'admin' and item.status == 'pending' %}
+                <div class="alert alert-warning">
+                    <h5>管理员审核</h5>
+                    <p>请核对此商品信息（照片、描述、起拍价）是否合规。</p>
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('approve_item', item_id=item.id) }}" class="btn btn-success flex-grow-1">批准上架</a>
+                        <button type="button" class="btn btn-danger flex-grow-1" onclick="openRejectModal({{ item.id }})">拒绝申请</button>
+                    </div>
+                </div>
                 {% elif not current_user.is_authenticated %}
                     <a href="{{ url_for('login') }}" class="btn btn-primary">登录以出价</a>
                 {% endif %}
@@ -79,11 +88,43 @@
         </div>
     </div>
 </div>
+
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">拒绝申请</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="rejectForm" method="POST">
+          <div class="modal-body">
+            <div class="mb-3">
+                <label for="reject-reason" class="form-label">拒绝理由</label>
+                <textarea class="form-control" id="reject-reason" name="reason" rows="3" required placeholder="请说明理由，以便卖家改正"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="submit" class="btn btn-danger">确认拒绝</button>
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
 <script>
-    var socket = io();
+    function openRejectModal(itemId) {
+        var form = document.getElementById('rejectForm');
+        form.action = "/reject/" + itemId;
+        var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+        modal.show();
+    }
+
+    // var socket = io(); // Removed to use shared socket
     var itemId = {{ item.id }};
     var endTime = new Date("{{ item.end_time.isoformat() }}Z");
     var status = "{{ item.status }}";
@@ -162,10 +203,17 @@
             return;
         }
         
+        var days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        var hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         var seconds = Math.floor((diff % (1000 * 60)) / 1000);
         
-        document.getElementById('time-left').innerText = "剩余 " + minutes + " 分 " + seconds + " 秒";
+        var timeString = "";
+        if (days > 0) timeString += days + " 天 ";
+        if (hours > 0 || days > 0) timeString += hours + " 小时 ";
+        timeString += minutes + " 分 " + seconds + " 秒";
+
+        document.getElementById('time-left').innerText = "剩余 " + timeString;
     }
     
     setInterval(updateTimer, 1000);

@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
+from sqlalchemy import text
 import os
 import threading
 import time
@@ -15,7 +16,10 @@ pymysql.install_as_MySQLdb()
 # 初始化应用
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+
+# 使用绝对路径配置上传文件夹，确保文件持久化存储
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
 
 # --- 数据库配置 (请根据实际情况修改) ---
@@ -29,6 +33,23 @@ db = SQLAlchemy(app)
 socketio = SocketIO(app, cors_allowed_origins="*") 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+@socketio.on('connect')
+def handle_connect():
+    if current_user.is_authenticated:
+        join_room(f"user_{current_user.id}")
+        print(f"User {current_user.username} (ID: {current_user.id}) joined room user_{current_user.id}")
+
+# --- 全局 Context Processor ---
+@app.context_processor
+def inject_pending_count():
+    if current_user.is_authenticated and current_user.role == 'admin':
+        try:
+            count = Item.query.filter_by(status='pending').count()
+            return dict(pending_count=count)
+        except:
+            return dict(pending_count=0)
+    return dict(pending_count=0)
 
 # --- 数据库模型 (与 schema.sql 对应) ---
 
@@ -53,6 +74,7 @@ class Item(db.Model):
     start_time = db.Column(db.DateTime, default=datetime.now)
     end_time = db.Column(db.DateTime, nullable=False)
     status = db.Column(db.String(20), default='pending') 
+    rejection_reason = db.Column(db.String(255), nullable=True) # 拒绝理由
     highest_bidder_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
     
@@ -85,19 +107,28 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 def check_auctions():
-    """后台任务：检查拍卖是否结束"""
+    """后台任务：检查拍卖状态"""
     while True:
         try:
             with app.app_context():
                 now = datetime.now()
-                # 查找已到期且仍在进行中的拍卖
+                
+                # 1. 检查已到期的 'active' 拍卖 -> 'ended'
                 expired_items = Item.query.filter(Item.status == 'active', Item.end_time <= now).all()
                 for item in expired_items:
                     item.status = 'ended'
                     db.session.commit()
-                    # 通知房间内的用户拍卖结束
                     winner_name = item.highest_bidder.username if item.highest_bidder else '无人出价'
                     socketio.emit('auction_ended', {'item_id': item.id, 'winner': winner_name}, room=f"item_{item.id}")
+
+                # 2. 检查已到开拍时间的 'approved' 拍卖 -> 'active'
+                starting_items = Item.query.filter(Item.status == 'approved', Item.start_time <= now).all()
+                for item in starting_items:
+                    item.status = 'active'
+                    db.session.commit()
+                    # 可选择通知首页刷新，或在该 Item 的房间里广播
+                    print(f"Auction {item.id} started automatically at {now}")
+
         except Exception as e:
             print(f"Check auction error: {e}")
         time.sleep(10) 
@@ -105,10 +136,18 @@ def check_auctions():
 # --- 路由 ---
 
 @app.route('/')
+@login_required
 def index():
     try:
-        items = Item.query.filter_by(status='active').all()
-        return render_template('index.html', items=items)
+        # 分类获取不同状态的拍卖物品
+        active_items = Item.query.filter_by(status='active').order_by(Item.end_time).all()
+        upcoming_items = Item.query.filter_by(status='approved').order_by(Item.start_time).all()
+        ended_items = Item.query.filter_by(status='ended').order_by(Item.end_time.desc()).limit(12).all() # 限制显示最近结束的12个
+        
+        return render_template('index.html', 
+                             active_items=active_items, 
+                             upcoming_items=upcoming_items, 
+                             ended_items=ended_items)
     except Exception as e:
         return f"<h3>数据库连接失败</h3><p>请检查 app.py 中的数据库密码配置。</p><p>错误详情: {e}</p>"
 
@@ -131,8 +170,12 @@ def register():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
         role = request.form.get('role')
-        if User.query.filter_by(username=username).first():
+        
+        if password != confirm_password:
+             flash('两次输入的密码不一致')
+        elif User.query.filter_by(username=username).first():
             flash('用户名已存在')
         elif role not in ['buyer', 'seller']:
              flash('无效的角色选择')
@@ -164,7 +207,18 @@ def publish():
         start_price = float(request.form.get('start_price'))
         duration = int(request.form.get('duration')) 
         
-        end_time = datetime.now() + timedelta(minutes=duration)
+        start_time_str = request.form.get('start_time')
+        if start_time_str:
+            try:
+                # datetime-local format: YYYY-MM-DDTHH:MM
+                start_time = datetime.strptime(start_time_str, '%Y-%m-%dT%H:%M')
+            except ValueError:
+                # Fallback if format is wrong
+                start_time = datetime.now()
+        else:
+            start_time = datetime.now()
+
+        end_time = start_time + timedelta(minutes=duration)
         
         new_item = Item(
             seller_id=current_user.id,
@@ -172,6 +226,7 @@ def publish():
             description=description,
             start_price=start_price,
             current_price=start_price,
+            start_time=start_time,
             end_time=end_time,
             status='pending' 
         )
@@ -199,12 +254,19 @@ def publish():
                 db.session.add(new_image)
 
         db.session.commit()
+        
+        # 通知管理员有新审核
+        socketio.emit('new_pending_item', {
+            'msg': f'新拍品待审核: {new_item.name} (卖家: {current_user.username})'
+        }, room='admin_room')
+        
         flash('拍品已提交，等待管理员审核')
         return redirect(url_for('index'))
         
     return render_template('publish.html')
 
 @app.route('/item/<int:item_id>')
+@login_required
 def item_detail(item_id):
     item = Item.query.get_or_404(item_id)
     return render_template('item_detail.html', item=item)
@@ -216,7 +278,11 @@ def admin_dashboard():
         flash('权限不足')
         return redirect(url_for('index'))
     pending_items = Item.query.filter_by(status='pending').all()
-    return render_template('admin_dashboard.html', items=pending_items)
+    # 获取正在进行或即将开始的拍卖，以便管理员管理
+    active_items = Item.query.filter(Item.status.in_(['active', 'approved'])).order_by(Item.start_time).all()
+    # 获取已结束的拍卖
+    ended_items = Item.query.filter_by(status='ended').order_by(Item.end_time.desc()).all()
+    return render_template('admin_dashboard.html', items=pending_items, active_items=active_items, ended_items=ended_items)
 
 @app.route('/approve/<int:item_id>')
 @login_required
@@ -224,32 +290,79 @@ def approve_item(item_id):
     if current_user.role != 'admin':
         return redirect(url_for('index'))
     item = Item.query.get_or_404(item_id)
-    item.status = 'active'
     
-    # 重新计算结束时间
-    original_duration = item.end_time - item.start_time
-    if original_duration.total_seconds() < 60:
-         original_duration = timedelta(hours=1)
-         
-    item.start_time = datetime.now()
-    item.end_time = item.start_time + original_duration
+    # Check if this is a future scheduled item
+    if item.start_time > datetime.now():
+        item.status = 'approved' # Waiting for start time
+        flash(f'已批准。拍卖将于 {item.start_time.strftime("%Y-%m-%d %H:%M")} 自动开始')
+    else:
+        # If immediate or time passed, start now
+        item.status = 'active'
+        # Reset start time to now to ensure full duration (if desirable for delayed approval)
+        # Assuming if user wanted 8:00 but admin approves 9:00, we shift to 9:00
+        original_duration = item.end_time - item.start_time
+        if original_duration.total_seconds() < 60:
+             original_duration = timedelta(hours=1)
+        item.start_time = datetime.now()
+        item.end_time = item.start_time + original_duration
+        flash('已批准并立即开拍')
     
     db.session.commit()
-    flash('已批准上架')
     return redirect(url_for('admin_dashboard'))
 
-@app.route('/reject/<int:item_id>')
+@app.route('/reject/<int:item_id>', methods=['POST'])
 @login_required
 def reject_item(item_id):
     if current_user.role != 'admin':
         return redirect(url_for('index'))
+    
     item = Item.query.get_or_404(item_id)
+    reason = request.form.get('reason', '')
+    
     item.status = 'rejected'
+    item.rejection_reason = reason
     db.session.commit()
-    flash('已拒绝')
+    
+    # Notify seller via SocketIO
+    socketio.emit('auction_rejected', {
+        'item_name': item.name,
+        'reason': reason,
+        'msg': f'您的拍品 "{item.name}" 已被拒绝。理由: {reason}'
+    }, room=f"user_{item.seller_id}")
+    
+    flash('已拒绝并在卖家端发送通知')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/stop/<int:item_id>')
+@login_required
+def stop_auction(item_id):
+    """管理员强制停止拍卖"""
+    if current_user.role != 'admin':
+        return redirect(url_for('index'))
+    item = Item.query.get_or_404(item_id)
+    
+    # 允许停止 active 或 approved 状态的商品
+    if item.status in ['active', 'approved']:
+        item.status = 'rejected' # 或者 'stopped'
+        db.session.commit()
+        
+        # 如果正在进行，通知房间内用户
+        socketio.emit('error', {'msg': '管理员已强制终止此拍卖'}, room=f"item_{item.id}")
+        socketio.emit('auction_ended', {'item_id': item.id, 'winner': '管理员终止'}, room=f"item_{item.id}")
+        
+        flash(f'已强制停止拍品: {item.name}')
+    else:
+        flash('该拍品当前状态无法停止')
+        
     return redirect(url_for('admin_dashboard'))
 
 # --- SocketIO 事件 ---
+
+@socketio.on('join_check')
+def on_join_check(data):
+    """前端连接后发送此事件，用于加入特定权限房间"""
+    if current_user.is_authenticated and current_user.role == 'admin':
+        join_room('admin_room')
 
 @socketio.on('join')
 def on_join(data):
@@ -316,6 +429,18 @@ def on_bid(data):
 
 if __name__ == '__main__':
     with app.app_context():
+        # Ensure tables exist
+        db.create_all()
+        
+        # 尝试自动迁移添加 rejection_reason 字段 (如果不存在)
+        try:
+            db.session.execute(text("ALTER TABLE items ADD COLUMN rejection_reason VARCHAR(255)"))
+            db.session.commit()
+            print(">>> 成功添加 rejection_reason 字段")
+        except Exception as e:
+            # 忽略错误，假设字段已存在
+            print(f">>> 尝试添加字段跳过 (可能已存在): {e}")
+
         try:
             # 尝试创建一个默认管理员，防止数据库是空的
             if not User.query.filter_by(username='admin').first():

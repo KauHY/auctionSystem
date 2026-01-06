@@ -1,5 +1,6 @@
 -- 在线拍卖系统 SQL 脚本 (MySQL 兼容)
 -- 如果使用 SQLite，部分语法(如 AUTO_INCREMENT, ENGINE)可能需要调整
+-- 现在MySQL中建立一个auction数据库
 
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -19,7 +20,8 @@ CREATE TABLE items (
     increment DECIMAL(10, 2) DEFAULT 10.00,
     start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     end_time DATETIME NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'ended'
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'ended', 'approved'
+    rejection_reason VARCHAR(255),
     highest_bidder_id INT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
