@@ -263,6 +263,34 @@
                 toast.show();
             }
         });
+
+        // 监听拍卖结果通知 (通用)
+        socket.on('auction_result_toast', function(data) {
+            var toastEl = document.getElementById('notificationToast');
+            if (toastEl) {
+                var headerEl = toastEl.querySelector('.toast-header');
+                var titleEl = toastEl.querySelector('.toast-header strong');
+                
+                // 根据类型设置颜色
+                if (data.type === 'success') { // 中标
+                    headerEl.className = 'toast-header bg-success text-white';
+                    if(titleEl) titleEl.innerText = "中标通知";
+                } else if (data.type === 'info') { // 卖家通知
+                    headerEl.className = 'toast-header bg-primary text-white';
+                    if(titleEl) titleEl.innerText = "拍卖结果";
+                } else if (data.type === 'warning') { // 未中标
+                    headerEl.className = 'toast-header bg-warning text-dark';
+                    if(titleEl) titleEl.innerText = "拍卖结果";
+                } else {
+                    headerEl.className = 'toast-header bg-secondary text-white';
+                }
+
+                document.getElementById('notificationBody').innerText = data.msg;
+                
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
     </script>
     {% endblock %}
 </body>

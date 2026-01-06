@@ -11,6 +11,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False)
     phone = db.Column(db.String(20), nullable=True) # 新增：联系电话
     avatar = db.Column(db.String(200), nullable=True) # 新增：用户头像文件名
+    banned_until = db.Column(db.DateTime, nullable=True) # 新增：封禁截止时间
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 class Item(db.Model):
@@ -28,8 +29,15 @@ class Item(db.Model):
     rejection_reason = db.Column(db.String(255), nullable=True) # 拒绝理由
     highest_bidder_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     order_hash = db.Column(db.String(64), nullable=True) # 订单哈希 (SHA256 hex digest is 64 chars)
-    created_at = db.Column(db.DateTime, default=datetime.now)
     
+    # 支付与物流
+    payment_status = db.Column(db.String(20), default='unpaid') # unpaid, paid
+    shipping_name = db.Column(db.String(80), nullable=True)
+    shipping_phone = db.Column(db.String(20), nullable=True)
+    shipping_address = db.Column(db.String(255), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
     seller = db.relationship('User', foreign_keys=[seller_id])
     highest_bidder = db.relationship('User', foreign_keys=[highest_bidder_id])
     images = db.relationship('ItemImage', backref='item', lazy=True)

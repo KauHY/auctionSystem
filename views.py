@@ -10,6 +10,10 @@ from models import User, Item, ItemImage, Post, Bid
 import query
 from services import send_system_message
 
+import qrcode
+from io import BytesIO
+import base64
+
 def register_views(app):
 
     # --- 全局 Context Processor ---
@@ -380,6 +384,89 @@ def register_views(app):
         new_post = Post(user_id=current_user.id, content=content)
         db.session.add(new_post)
         db.session.commit()
+        flash('动态发布成功')
+        return redirect(url_for('user_profile', user_id=current_user.id))
+
+    @app.route('/item/<int:item_id>/pay', methods=['GET', 'POST'])
+    @login_required
+    def pay_item(item_id):
+        item = Item.query.get_or_404(item_id)
+        
+        # Security checks
+        if item.highest_bidder_id != current_user.id:
+            flash('您不是该拍品的获胜者，无法进行支付')
+            return redirect(url_for('item_detail', item_id=item_id))
+            
+        if item.status != 'ended':
+            flash('拍卖尚未结束')
+            return redirect(url_for('item_detail', item_id=item_id))
+            
+        if item.payment_status == 'paid':
+            flash('该订单已支付')
+            return redirect(url_for('item_detail', item_id=item_id))
+
+        show_qr = False
+        wx_qr = None
+        ali_qr = None
+
+        if request.method == 'POST':
+            # Identify if it is Step 1 (Address) or Step 2 (Confirm) - Wait, Step 2 is separate route? 
+            # In template I made them separate logic. Step 1 submits to same route.
+            
+            shipping_name = request.form.get('shipping_name')
+            shipping_phone = request.form.get('shipping_phone')
+            shipping_address = request.form.get('shipping_address')
+            
+            if shipping_name and shipping_phone and shipping_address:
+                # Save first
+                item.shipping_name = shipping_name
+                item.shipping_phone = shipping_phone
+                item.shipping_address = shipping_address
+                db.session.commit()
+                
+                # Generate QRs
+                # Wechat
+                qr = qrcode.QRCode(version=1, box_size=10, border=5)
+                # Mock Payment URL: weixin://wxpay/bizpayurl?pr=...
+                qr_data_wx = f"wxp://f2f09348JS888?oid={item.order_hash}&amt={item.current_price}"
+                qr.add_data(qr_data_wx)
+                qr.make(fit=True)
+                img = qr.make_image(fill='black', back_color='white')
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                wx_qr = base64.b64encode(buffered.getvalue()).decode()
+                
+                # Alipay
+                qr2 = qrcode.QRCode(version=1, box_size=10, border=5)
+                qr_data_ali = f"https://qr.alipay.com/bax093?oid={item.order_hash}&amt={item.current_price}"
+                qr2.add_data(qr_data_ali)
+                qr2.make(fit=True)
+                img2 = qr2.make_image(fill='black', back_color='white')
+                buffered2 = BytesIO()
+                img2.save(buffered2, format="PNG")
+                ali_qr = base64.b64encode(buffered2.getvalue()).decode()
+                
+                show_qr = True
+            else:
+                flash('请填写所有地址信息')
+
+        return render_template('payment.html', item=item, show_qr=show_qr, wx_qr=wx_qr, ali_qr=ali_qr)
+
+    @app.route('/item/<int:item_id>/confirm_payment', methods=['POST'])
+    @login_required
+    def confirm_payment(item_id):
+        item = Item.query.get_or_404(item_id)
+        if item.highest_bidder_id != current_user.id:
+            return redirect(url_for('index'))
+            
+        item.payment_status = 'paid'
+        db.session.commit()
+        
+        # Notify Seller
+        send_system_message(item.id, item.seller_id, f"订单 {item.order_hash} 已付款。请尽快安排发货。收货人：{item.shipping_name}，地址：{item.shipping_address}")
+        
+        flash('支付确认成功！')
+        return redirect(url_for('item_detail', item_id=item_id))
         
         flash('动态发布成功')
         return redirect(url_for('user_profile', user_id=current_user.id))

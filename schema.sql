@@ -7,6 +7,9 @@ CREATE TABLE users (
     username VARCHAR(80) NOT NULL UNIQUE,
     password_hash VARCHAR(128) NOT NULL,
     role VARCHAR(20) NOT NULL, -- 'buyer', 'seller', 'admin'
+    phone VARCHAR(20),
+    avatar VARCHAR(200),
+    banned_until DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -23,6 +26,11 @@ CREATE TABLE items (
     status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'ended', 'approved'
     rejection_reason VARCHAR(255),
     highest_bidder_id INT,
+    order_hash VARCHAR(64),
+    payment_status VARCHAR(20) DEFAULT 'unpaid',
+    shipping_name VARCHAR(80),
+    shipping_phone VARCHAR(20),
+    shipping_address VARCHAR(255),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (seller_id) REFERENCES users(id),
@@ -50,4 +58,27 @@ CREATE TABLE item_images (
     is_primary BOOLEAN DEFAULT FALSE,
     
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE chat_sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id INT NOT NULL,
+    buyer_id INT NOT NULL,
+    seller_id INT NOT NULL,
+    last_message VARCHAR(255),
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    buyer_unread INT DEFAULT 0,
+    seller_unread INT DEFAULT 0,
+    
+    FOREIGN KEY (item_id) REFERENCES items(id),
+    FOREIGN KEY (buyer_id) REFERENCES users(id),
+    FOREIGN KEY (seller_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

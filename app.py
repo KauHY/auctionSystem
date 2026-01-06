@@ -81,7 +81,26 @@ if __name__ == '__main__':
             db.session.commit()
             print(">>> 成功添加 avatar 字段")
         except Exception as e:
-            pass 
+            pass
+
+        # 尝试自动迁移添加 banned_until 字段
+        try:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN banned_until DATETIME"))
+            db.session.commit()
+            print(">>> 成功添加 banned_until 字段")
+        except Exception as e:
+            pass
+            
+        # 尝试自动迁移添加 payment_status 字段
+        try:
+            db.session.execute(text("ALTER TABLE items ADD COLUMN payment_status VARCHAR(20) DEFAULT 'unpaid'"))
+            db.session.execute(text("ALTER TABLE items ADD COLUMN shipping_name VARCHAR(80)"))
+            db.session.execute(text("ALTER TABLE items ADD COLUMN shipping_phone VARCHAR(20)"))
+            db.session.execute(text("ALTER TABLE items ADD COLUMN shipping_address VARCHAR(255)"))
+            db.session.commit()
+            print(">>> 成功添加支付和物流字段")
+        except Exception as e:
+            print(f">>> 尝试添加支付物流字段跳过 (可能已存在): {e}")
 
         try:
             # 尝试创建一个默认管理员，防止数据库是空的

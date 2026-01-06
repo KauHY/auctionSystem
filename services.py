@@ -46,7 +46,12 @@ def send_system_message(item_id, receiver_id, content):
         session.last_message = f"[系统通知] {content}"
         session.updated_at = datetime.now()
         
-        # 增加未读计数
+        # 增加未读计数 (Ensure not None)
+        if session.buyer_unread is None:
+            session.buyer_unread = 0
+        if session.seller_unread is None:
+            session.seller_unread = 0
+
         if receiver_id == b_id:
             session.buyer_unread += 1
         else:

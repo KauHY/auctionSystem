@@ -82,6 +82,36 @@
                                 {{ item.order_hash }}
                             </div>
                         </div>
+
+                        <!-- 支付状态显示 -->
+                        <div class="mt-2 pt-2 border-top">
+                            <strong>支付状态:</strong>
+                            {% if item.payment_status == 'paid' %}
+                                <span class="badge bg-success">已付款</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">未付款</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- 获胜者操作区域 -->
+                        {% if current_user.id == item.highest_bidder_id %}
+                            {% if item.payment_status != 'paid' %}
+                                <div class="mt-3">
+                                    <a href="{{ url_for('pay_item', item_id=item.id) }}" class="btn btn-primary w-100">立即支付 & 填写地址</a>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        <!-- 卖家可见的收货信息 -->
+                        {% if current_user.id == item.seller_id and item.payment_status == 'paid' %}
+                            <div class="mt-3 p-2 bg-light border rounded">
+                                <h6>收货信息:</h6>
+                                <p class="mb-1"><strong>姓名:</strong> {{ item.shipping_name }}</p>
+                                <p class="mb-1"><strong>电话:</strong> {{ item.shipping_phone }}</p>
+                                <p class="mb-0"><strong>地址:</strong> {{ item.shipping_address }}</p>
+                            </div>
+                        {% endif %}
+
                         {% endif %}
                     {% else %}
                         {{ item.status }}

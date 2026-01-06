@@ -36,6 +36,11 @@ def register_events(socketio):
         if not item or item.status != 'active':
             return
             
+        # 检查封禁状态
+        if current_user.banned_until and current_user.banned_until > datetime.now():
+            emit('error', {'msg': f'由于未付款记录，您的账户已被封禁至 {current_user.banned_until.strftime("%Y-%m-%d %H:%M")}，暂无法出价。'}, room=request.sid)
+            return
+            
         # 禁止连续出价
         if item.highest_bidder_id == current_user.id:
             emit('error', {'msg': '您已经是当前最高出价者，不可重复出价'}, room=request.sid)

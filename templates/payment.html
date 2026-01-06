@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">订单支付与收货信息</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success">
+                        <h4 class="alert-heading">恭喜您竞得拍品！</h4>
+                        <p class="mb-0">拍品名称：<strong>{{ item.name }}</strong></p>
+                        <p class="mb-0">应付金额：<strong class="text-danger fs-4">¥{{ item.current_price }}</strong></p>
+                        <p class="mb-0">订单编号：<code>{{ item.order_hash }}</code></p>
+                    </div>
+
+                    {% if not show_qr %}
+                    <form method="POST">
+                        <h5 class="mt-4 mb-3 border-bottom pb-2">步骤 1: 填写收货地址</h5>
+                        <div class="mb-3">
+                            <label for="shipping_name" class="form-label">收货人姓名</label>
+                            <input type="text" class="form-control" id="shipping_name" name="shipping_name" required value="{{ current_user.username }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="shipping_phone" class="form-label">联系电话</label>
+                            <input type="text" class="form-control" id="shipping_phone" name="shipping_phone" required value="{{ current_user.phone or '' }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="shipping_address" class="form-label">详细地址</label>
+                            <textarea class="form-control" id="shipping_address" name="shipping_address" rows="3" required placeholder="请输入省市区街道门牌号"></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">下一步：获取收款码</button>
+                            <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-outline-secondary">稍后支付</a>
+                        </div>
+                    </form>
+                    {% else %}
+                    
+                    <h5 class="mt-4 mb-3 border-bottom pb-2">步骤 2: 扫码支付</h5>
+                    
+                    <div class="row text-center mt-4">
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 border-success">
+                                <div class="card-header bg-success text-white">微信支付</div>
+                                <div class="card-body d-flex align-items-center justify-content-center">
+                                    <img src="data:image/png;base64,{{ wx_qr }}" alt="Wait..." class="img-fluid" style="max-height: 200px;">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100 border-primary">
+                                <div class="card-header bg-primary text-white">支付宝支付</div>
+                                <div class="card-body d-flex align-items-center justify-content-center">
+                                    <img src="data:image/png;base64,{{ ali_qr }}" alt="Wait..." class="img-fluid" style="max-height: 200px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-info-circle"></i> 这是一个模拟支付演示。请使用手机扫码（模拟），然后在下方点击“我已完成支付”。
+                    </div>
+
+                    <form action="{{ url_for('confirm_payment', item_id=item.id) }}" method="POST">
+                        <!-- Passed Hidden values just in case, though saved in DB is better. Here we assume Step 1 saved to DB or passed context. 
+                             Actually better flow: Step 1 POST update DB -> render template with show_qr=True -> Step 2 POST confirm status.
+                        -->
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">我已完成支付</button>
+                        </div>
+                    </form>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
