@@ -32,7 +32,15 @@
                     {% endif %}
                     {% if current_user.is_authenticated and current_user.role == 'admin' %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('admin_dashboard') }}">后台管理</a>
+                        <a class="nav-link position-relative" href="{{ url_for('admin_dashboard') }}">
+                            后台管理
+                            {% if pending_count > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                {{ pending_count }}
+                                <span class="visually-hidden">unread messages</span>
+                            </span>
+                            {% endif %}
+                        </a>
                     </li>
                     {% endif %}
                 </ul>
@@ -78,7 +86,87 @@
         </div>
     </footer>
 
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        
+        <!-- Admin Notification Toast -->
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+          <div id="adminToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-autohide="false">
+            <div class="toast-header bg-danger text-white">
+              <strong class="me-auto">待办事项提醒</strong>
+              <small>系统消息</small>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="adminToastBody">
+               当前有 <strong>{{ pending_count }}</strong> 个拍品等待审核。
+               <div class="mt-2 pt-2 border-top">
+                   <a href="{{ url_for('admin_dashboard') }}" class="btn btn-sm btn-light text-dark fw-bold w-100">立即处理</a>
+               </div>
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- General Notification Toast -->
+        <div id="notificationToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header bg-warning text-dark">
+                <strong class="me-auto">通知</strong>
+                <small class="text-muted">刚刚</small>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body" id="notificationBody">
+                <!-- Content injected by JS -->
+            </div>
+        </div>
+
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
+    {% block scripts %}
+    <script>
+        var socket = io();
+        socket.on('connect', function() {
+             socket.emit('join_check', {});
+        });
+        
+        // 如果有pending_count且大于0，自动显示Toast
+        {% if current_user.is_authenticated and current_user.role == 'admin' and pending_count > 0 %}
+        document.addEventListener('DOMContentLoaded', function() {
+            var toastEl = document.getElementById('adminToast');
+            if (toastEl) {
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
+        {% endif %}
+
+        // 全局监听管理员通知
+        socket.on('new_pending_item', function(data) {
+            var toastEl = document.getElementById('adminToast');
+            if (toastEl) {
+                document.getElementById('adminToastBody').innerHTML = data.msg + 
+                '<div class="mt-2 pt-2 border-top">' + 
+                '<a href="{{ url_for("admin_dashboard") }}" class="btn btn-sm btn-light text-dark fw-bold w-100">立即处理</a>' + 
+                '</div>';
+                
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
+
+        // 监听拍卖被拒绝通知
+        socket.on('auction_rejected', function(data) {
+            var toastEl = document.getElementById('notificationToast');
+            if (toastEl) {
+                document.getElementById('notificationBody').innerText = data.msg;
+                // 将标题改为“申请被拒绝”或其他相关提示
+                var headerEl = toastEl.querySelector('.toast-header strong');
+                if(headerEl) headerEl.innerText = "申请被拒绝";
+                
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
+    </script>
+    {% endblock %}
 </body>
 </html>

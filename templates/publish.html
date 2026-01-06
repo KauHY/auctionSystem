@@ -26,6 +26,10 @@
                         <input type="number" step="0.01" class="form-control" id="start_price" name="start_price" required>
                     </div>
                     <div class="mb-3">
+                        <label for="start_time" class="form-label">期望开拍时间 (留空则审核后立即开始)</label>
+                        <input type="datetime-local" class="form-control" id="start_time" name="start_time">
+                    </div>
+                    <div class="mb-3">
                         <label for="duration" class="form-label">拍卖时长 (分钟)</label>
                         <input type="number" class="form-control" id="duration" name="duration" value="60" required>
                         <div class="form-text">审核通过后开始计时。</div>

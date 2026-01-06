@@ -3,48 +3,185 @@
 {% block content %}
 <div class="row">
     <div class="col-md-12">
-        <h1>后台管理 - 待审核拍品</h1>
+        <h1>后台管理</h1>
     </div>
 </div>
 
-<div class="table-responsive mt-3">
-    <table class="table table-striped table-hover">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>名称</th>
-                <th>卖家</th>
-                <th>描述</th>
-                <th>起拍价</th>
-                <th>状态</th>
-                <th>操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>{{ item.id }}</td>
-                <td>{{ item.name }}</td>
-                <td>{{ item.seller.username }}</td>
-                <td>{{ item.description[:50] }}...</td>
-                <td>¥{{ item.start_price }}</td>
-                <td><span class="badge bg-warning text-dark">{{ item.status }}</span></td>
-                <td>
-                    <a href="{{ url_for('approve_item', item_id=item.id) }}" class="btn btn-success btn-sm">批准</a>
-                    <a href="{{ url_for('reject_item', item_id=item.id) }}" class="btn btn-danger btn-sm">拒绝</a>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" class="text-center">暂无待审核拍品</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<ul class="nav nav-tabs mt-3" id="adminTabs" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">待审核</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button" role="tab">运行中/已通过</button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">历史记录</button>
+  </li>
+</ul>
+
+<div class="tab-content" id="myTabContent">
+  <!-- 待审核列表 -->
+  <div class="tab-pane fade show active" id="pending" role="tabpanel">
+    <div class="table-responsive mt-3">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>名称</th>
+                    <th>卖家</th>
+                    <th>描述</th>
+                    <th>起拍价</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td>
+                        <a href="{{ url_for('item_detail', item_id=item.id) }}" target="_blank" title="点击查看详情">
+                            {{ item.name }}
+                        </a>
+                    </td>
+                    <td>{{ item.seller.username }}</td>
+                    <td>{{ item.description[:50] }}...</td>
+                    <td>¥{{ item.start_price }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ item.status }}</span></td>
+                    <td>
+                        <a href="{{ url_for('approve_item', item_id=item.id) }}" class="btn btn-success btn-sm">批准</a>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="openRejectModal({{ item.id }})">拒绝</button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">暂无待审核拍品</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+  </div>
+
+  <!-- 运行中列表 -->
+  <div class="tab-pane fade" id="active" role="tabpanel">
+    <div class="table-responsive mt-3">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>名称</th>
+                    <th>当前价</th>
+                    <th>卖家</th>
+                    <th>状态</th>
+                    <th>时间信息</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in active_items %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td><a href="{{ url_for('item_detail', item_id=item.id) }}" target="_blank">{{ item.name }}</a></td>
+                    <td>¥{{ item.current_price }}</td>
+                    <td>{{ item.seller.username }}</td>
+                    <td>
+                        {% if item.status == 'approved' %}
+                            <span class="badge bg-info text-dark">即将开始</span>
+                        {% else %}
+                            <span class="badge bg-success">进行中</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <small>开始: {{ item.start_time.strftime('%m-%d %H:%M') }}</small><br>
+                        <small>结束: {{ item.end_time.strftime('%m-%d %H:%M') }}</small>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('stop_auction', item_id=item.id) }}" class="btn btn-danger btn-sm" onclick="return confirm('确定要强制停止此拍卖吗？')">强制下架</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">暂无正在进行的拍卖</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+  </div>
+
+  <!-- 历史记录列表 -->
+  <div class="tab-pane fade" id="history" role="tabpanel">
+    <div class="table-responsive mt-3">
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>名称</th>
+                    <th>成交价</th>
+                    <th>卖家</th>
+                    <th>获胜者</th>
+                    <th>结束时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in ended_items %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td><a href="{{ url_for('item_detail', item_id=item.id) }}" target="_blank">{{ item.name }}</a></td>
+                    <td>¥{{ item.current_price }}</td>
+                    <td>{{ item.seller.username }}</td>
+                    <td>{{ item.highest_bidder.username if item.highest_bidder else '流拍' }}</td>
+                    <td><small>{{ item.end_time.strftime('%Y-%m-%d %H:%M') }}</small></td>
+                    <td>
+                         <a href="{{ url_for('item_detail', item_id=item.id) }}" target="_blank" class="btn btn-secondary btn-sm">查看详情</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center">暂无历史记录</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+  </div>
 </div>
 
-<div class="mt-4">
-    <h3>系统统计</h3>
-    <p>此处可添加更多统计图表...</p>
+<!-- Rejection Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">拒绝申请</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="rejectForm" method="POST">
+          <div class="modal-body">
+            <div class="mb-3">
+                <label for="reject-reason" class="form-label">拒绝理由</label>
+                <textarea class="form-control" id="reject-reason" name="reason" rows="3" required placeholder="请说明理由，以便卖家改正"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="submit" class="btn btn-danger">确认拒绝</button>
+          </div>
+      </form>
+    </div>
+  </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+function openRejectModal(itemId) {
+    var form = document.getElementById('rejectForm');
+    form.action = "/reject/" + itemId;
+    var modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+    modal.show();
+}
+</script>
 {% endblock %}

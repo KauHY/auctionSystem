@@ -1,40 +1,112 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <h1>当前拍卖</h1>
-    </div>
-</div>
 
-<div class="row">
-    {% for item in items %}
-    <div class="col-md-4 mb-4">
-        <div class="card h-100">
-            {% if item.images and item.images|length > 0 %}
-                <img src="{{ url_for('static', filename=item.images[0].image_url) }}" class="card-img-top" alt="{{ item.name }}" style="height: 200px; object-fit: cover;">
-            {% else %}
-                <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
-                    暂无图片
+<!-- 宏定义：用于渲染单个商品卡片 -->
+{% macro render_item_card(item, type) %}
+<div class="col-md-4 mb-4">
+    <div class="card h-100 {{ 'border-secondary' if type == 'ended' else '' }}">
+        {% if item.images and item.images|length > 0 %}
+            <img src="{{ url_for('static', filename=item.images[0].image_url) }}" class="card-img-top" alt="{{ item.name }}" style="height: 200px; object-fit: cover; {{ 'filter: grayscale(100%);' if type == 'ended' else '' }}">
+        {% else %}
+            <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px; {{ 'filter: grayscale(100%);' if type == 'ended' else '' }}">
+                暂无图片
+            </div>
+        {% endif %}
+        
+        <div class="card-body">
+            <h5 class="card-title text-truncate">{{ item.name }}</h5>
+            
+            {% if type == 'active' %}
+                <p class="card-text">
+                    <strong>当前价: </strong> <span class="text-danger fw-bold fs-5">¥{{ item.current_price }}</span>
+                </p>
+                <div class="alert alert-light border p-1 mb-2 text-center text-danger small">
+                    <i class="bi bi-clock"></i> 结束: {{ item.end_time.strftime('%m-%d %H:%M') }}
+                </div>
+            {% elif type == 'upcoming' %}
+                <p class="card-text">
+                    <strong>起拍价: </strong> <span>¥{{ item.start_price }}</span>
+                </p>
+                <div class="alert alert-info p-1 mb-2 text-center small">
+                     开始: {{ item.start_time.strftime('%m-%d %H:%M') }}
+                </div>
+            {% elif type == 'ended' %}
+                <p class="card-text text-muted">
+                    <strong>成交价: </strong> <span>¥{{ item.current_price }}</span>
+                </p>
+                <div class="alert alert-secondary p-1 mb-2 text-center small">
+                    已结束: {{ item.end_time.strftime('%m-%d') }}
                 </div>
             {% endif %}
-            <div class="card-body">
-                <h5 class="card-title">{{ item.name }}</h5>
-                <p class="card-text text-truncate">{{ item.description }}</p>
-                <p class="card-text">
-                    <strong>当前价: </strong> <span class="text-danger">¥{{ item.current_price }}</span>
-                </p>
-                <p class="card-text"><small class="text-muted">结束时间: {{ item.end_time.strftime('%Y-%m-%d %H:%M:%S') }} UTC</small></p>
-            </div>
-            <div class="card-footer">
-                <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-primary w-100">查看详情 & 出价</a>
-            </div>
+            
+            <p class="card-text small text-muted text-truncate">{{ item.description }}</p>
+        </div>
+        
+        <div class="card-footer bg-white border-top-0">
+            {% if type == 'active' %}
+                <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-danger w-100">立即出价</a>
+            {% elif type == 'upcoming' %}
+                <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-outline-primary w-100">查看详情</a>
+            {% else %}
+                <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-secondary w-100">查看结果</a>
+            {% endif %}
         </div>
     </div>
-    {% else %}
-    <div class="col-md-12">
-        <div class="alert alert-warning">暂无正在进行的拍卖。</div>
-    </div>
-    {% endfor %}
 </div>
+{% endmacro %}
+
+<!-- 页面主要内容 -->
+
+<!-- 1. 正在进行的拍卖 -->
+<div class="row mb-3">
+    <div class="col-12 d-flex align-items-center border-bottom pb-2">
+        <h3 class="text-danger m-0">正在热拍</h3>
+        <span class="badge bg-danger rounded-pill ms-2">{{ active_items|length }}</span>
+    </div>
+</div>
+<div class="row mb-5">
+    {% if active_items %}
+        {% for item in active_items %}
+            {{ render_item_card(item, 'active') }}
+        {% endfor %}
+    {% else %}
+        <div class="col-12 text-center text-muted py-4">暂无正在进行的拍卖</div>
+    {% endif %}
+</div>
+
+<!-- 2. 即将开始的拍卖 -->
+<div class="row mb-3">
+    <div class="col-12 d-flex align-items-center border-bottom pb-2">
+        <h3 class="text-primary m-0">即将开始</h3>
+        <span class="badge bg-primary rounded-pill ms-2">{{ upcoming_items|length }}</span>
+    </div>
+</div>
+<div class="row mb-5">
+    {% if upcoming_items %}
+        {% for item in upcoming_items %}
+            {{ render_item_card(item, 'upcoming') }}
+        {% endfor %}
+    {% else %}
+        <div class="col-12 text-center text-muted py-4">暂无即将开始的排期</div>
+    {% endif %}
+</div>
+
+<!-- 3. 已结束的拍卖 -->
+<div class="row mb-3">
+    <div class="col-12 d-flex align-items-center border-bottom pb-2">
+        <h3 class="text-secondary m-0">历史拍卖</h3>
+        <span class="badge bg-secondary rounded-pill ms-2">{{ ended_items|length }}</span>
+    </div>
+</div>
+<div class="row mb-5">
+    {% if ended_items %}
+        {% for item in ended_items %}
+            {{ render_item_card(item, 'ended') }}
+        {% endfor %}
+    {% else %}
+        <div class="col-12 text-center text-muted py-4">暂无历史记录</div>
+    {% endif %}
+</div>
+
 {% endblock %}
