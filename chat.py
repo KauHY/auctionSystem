@@ -1,7 +1,8 @@
 from flask import render_template, request, abort, url_for
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
-from models import User, Item, ChatSession
+from models import User, Item, ChatSession, ChatMessage
+from datetime import datetime
 from extensions import db
 from sqlalchemy import or_
 
@@ -45,8 +46,25 @@ def register_chat_routes(app):
             session.seller_unread = 0
         
         db.session.commit()
-        
-        return render_template('chat.html', item=item, other_user=other_user, current_user=current_user)
+
+        # 加载完整历史消息（按时间顺序）
+        messages = []
+        try:
+            session_id = session.id if session else None
+            if session_id:
+                history = ChatMessage.query.filter_by(session_id=session_id).order_by(ChatMessage.timestamp.asc()).all()
+                for m in history:
+                    messages.append({
+                        'sender': m.sender.username if m.sender else '未知用户',
+                        'sender_id': m.sender_id,
+                        'avatar': m.sender.avatar if m.sender else None,
+                        'msg': m.content,
+                        'timestamp': m.timestamp.isoformat() if m.timestamp else datetime.now().isoformat()
+                    })
+        except Exception as e:
+            print(f"Load chat history failed: {e}")
+
+        return render_template('chat.html', item=item, other_user=other_user, current_user=current_user, messages=messages)
 
 def register_chat_events(socketio):
     @socketio.on('join_chat')
@@ -87,17 +105,36 @@ def register_chat_events(socketio):
                             
                         # 查找会话
                         session = ChatSession.query.filter_by(item_id=item_id, buyer_id=buyer_id, seller_id=seller_id).first()
-                        if session:
-                            session.last_message = msg[:250] # 截断防止溢出
-                            # 增加对方未读数
-                            if current_user.id == buyer_id:
-                                session.seller_unread += 1
-                            else:
-                                session.buyer_unread += 1
+                        if not session:
+                            session = ChatSession(item_id=item_id, buyer_id=buyer_id, seller_id=seller_id)
+                            db.session.add(session)
                             db.session.commit()
-                            
-                            # 发送通知给接收者
-                            emit('new_chat_notification', {'msg': '您有一条新私信'}, room=f"user_{receiver_id}")
+
+                        # 更新摘要与未读
+                        session.last_message = msg[:250]
+                        if current_user.id == buyer_id:
+                            session.seller_unread = (session.seller_unread or 0) + 1
+                        else:
+                            session.buyer_unread = (session.buyer_unread or 0) + 1
+                        db.session.commit()
+
+                        # 写入完整聊天记录
+                        try:
+                            chat_record = ChatMessage(
+                                session_id=session.id,
+                                sender_id=current_user.id,
+                                receiver_id=receiver_id,
+                                content=msg,
+                                timestamp=datetime.now()
+                            )
+                            db.session.add(chat_record)
+                            db.session.commit()
+                        except Exception as e:
+                            print(f"Persist chat message failed: {e}")
+                            db.session.rollback()
+
+                        # 发送通知给接收者
+                        emit('new_chat_notification', {'msg': '您有一条新私信'}, room=f"user_{receiver_id}")
                             
                 except Exception as e:
                     print(f"Update chat session failed: {e}")
