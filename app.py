@@ -16,74 +16,16 @@ pymysql.install_as_MySQLdb()
 # 使用绝对路径配置上传文件夹，确保文件持久化存储
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-<<<<<<< HEAD
-# --- 数据库配置 (请根据实际情况修改) ---
-# 格式: mysql+pymysql://用户名:密码@主机地址:端口/数据库名
-# 假设您的MySQL用户名是 root，密码是 123456，数据库是 Auction
-# 您可能需要根据您的真实配置修改这里的密码
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:12345@localhost/Auction'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
-socketio = SocketIO(app, cors_allowed_origins="*") 
-login_manager = LoginManager(app)
-login_manager.login_view = 'login'
-
-@socketio.on('connect')
-def handle_connect():
-    if current_user.is_authenticated:
-        join_room(f"user_{current_user.id}")
-        print(f"User {current_user.username} (ID: {current_user.id}) joined room user_{current_user.id}")
-
-# --- 全局 Context Processor ---
-@app.context_processor
-def inject_pending_count():
-    if current_user.is_authenticated and current_user.role == 'admin':
-        try:
-            count = Item.query.filter_by(status='pending').count()
-            return dict(pending_count=count)
-        except:
-            return dict(pending_count=0)
-    return dict(pending_count=0)
-
-# --- 数据库模型 (与 schema.sql 对应) ---
-
-class User(UserMixin, db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    # schema.sql 中字段名为 password_hash
-    password_hash = db.Column(db.String(128), nullable=False) 
-    role = db.Column(db.String(20), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.now)
-
-class Item(db.Model):
-    __tablename__ = 'items'
-    id = db.Column(db.Integer, primary_key=True)
-    seller_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    start_price = db.Column(db.Numeric(10, 2), nullable=False)
-    current_price = db.Column(db.Numeric(10, 2), nullable=False)
-    increment = db.Column(db.Numeric(10, 2), default=10.0)
-    start_time = db.Column(db.DateTime, default=datetime.now)
-    end_time = db.Column(db.DateTime, nullable=False)
-    status = db.Column(db.String(20), default='pending') 
-    rejection_reason = db.Column(db.String(255), nullable=True) # 拒绝理由
-    highest_bidder_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now)
-=======
 def create_app():
     # 初始化应用
     app = Flask(__name__)
     app.config['SECRET_KEY'] = 'your_secret_key'
->>>>>>> 50b2d441ce0d393796c374cd4fb9c566a9708fb8
     
     app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads')
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
     
     # --- 数据库配置 (请根据实际情况修改) ---
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456@localhost/Auction'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:12345@localhost/Auction'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     db.init_app(app)
