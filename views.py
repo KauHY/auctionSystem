@@ -1,4 +1,4 @@
-from flask import render_template, request, redirect, url_for, flash, current_app, jsonify
+from flask import render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_user, login_required, logout_user, current_user
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
@@ -266,10 +266,13 @@ def register_views(app):
         
         # Notify seller via SocketIO
         msg_content = f'您的拍品 "{item.name}" 已通过审核并上架！'
-        # Removed redundant socketio.emit('auction_approved') as send_system_message now handles typed notifications
+        socketio.emit('auction_approved', {
+            'item_name': item.name,
+            'msg': msg_content
+        }, room=f"user_{item.seller_id}")
         
-        # 发送系统私信 (success -> green toast)
-        send_system_message(item.id, item.seller_id, msg_content, msg_type='success')
+        # 发送系统私信
+        send_system_message(item.id, item.seller_id, msg_content)
         
         return redirect(url_for('admin_dashboard'))
 
@@ -288,10 +291,14 @@ def register_views(app):
         
         # Notify seller via SocketIO
         msg_content = f'您的拍品 "{item.name}" 已被拒绝。理由: {reason}'
-        # Removed redundant socketio.emit('auction_rejected') as send_system_message now handles typed notifications
+        socketio.emit('auction_rejected', {
+            'item_name': item.name,
+            'reason': reason,
+            'msg': msg_content
+        }, room=f"user_{item.seller_id}")
         
-        # 发送系统私信 (warning -> yellow toast)
-        send_system_message(item.id, item.seller_id, msg_content, msg_type='warning')
+        # 发送系统私信
+        send_system_message(item.id, item.seller_id, msg_content)
         
         flash('已拒绝并在卖家端发送通知')
         return redirect(url_for('admin_dashboard'))
@@ -460,28 +467,6 @@ def register_views(app):
         
         flash('支付确认成功！')
         return redirect(url_for('item_detail', item_id=item_id))
-
-    @app.route('/api/item/<int:item_id>/status')
-    def get_item_status(item_id):
-        item = Item.query.get(item_id)
-        if not item:
-            return jsonify({'error': 'Item not found'}), 404
         
-        # Check permission for order_hash
-        show_order_hash = False
-        if current_user.is_authenticated:
-            if current_user.role == 'admin':
-                show_order_hash = True
-            elif item.seller_id == current_user.id:
-                show_order_hash = True
-            elif item.highest_bidder_id == current_user.id:
-                show_order_hash = True
-
-        return jsonify({
-            'status': item.status,
-            'end_time': item.end_time.isoformat(),
-            'winner_id': item.highest_bidder_id,
-            'winner_name': item.highest_bidder.username if item.highest_bidder else '无人出价',
-            'current_price': item.current_price,
-            'order_hash': item.order_hash if show_order_hash else None
-        })
+        flash('动态发布成功')
+        return redirect(url_for('user_profile', user_id=current_user.id))

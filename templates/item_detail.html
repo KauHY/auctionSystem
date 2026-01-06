@@ -186,7 +186,6 @@
     (function() {
         console.log("Item logic initialized");
         var itemId = {{ item.id }};
-        var currentUserId = {{ current_user.id if current_user.is_authenticated else 'null' }};
         var endTimeStr = "{{ item.end_time.isoformat() }}"; // Obtain string first
         var endTime = new Date(endTimeStr);
         var status = "{{ item.status }}".trim();
@@ -283,13 +282,6 @@
                 
                 var tl = document.getElementById('time-left');
                 if(tl) tl.innerText = "已结束";
-
-                // Redirect winner to payment page
-                if (data.winner_id && currentUserId && data.winner_id === currentUserId) {
-                    // Alert optional, but direct redirect is requested
-                    // alert("恭喜您中标！正在前往支付页面...");
-                    window.location.href = "/item/" + data.item_id + "/pay";
-                }
             });
         }
 
@@ -322,8 +314,6 @@
             };
         }
 
-        var checkInterval = null;
-
         // 倒计时逻辑
         function updateTimer() {
             if (status !== 'active') return;
@@ -335,49 +325,7 @@
             if (!timerEl) return;
 
             if (diff <= 0) {
-                timerEl.innerText = "正在确认结果...";
-                
-                if (!checkInterval) {
-                     checkInterval = setInterval(function() {
-                        fetch('/api/item/' + itemId + '/status')
-                            .then(response => response.json())
-                            .then(data => {
-                                if (data.status === 'ended' || data.status === 'paid' || data.status === 'timeout_cancelled') {
-                                    clearInterval(checkInterval);
-                                    status = 'ended'; 
-                                    
-                                    if (data.winner_id && currentUserId && data.winner_id === currentUserId) {
-                                        window.location.href = "/item/" + itemId + "/pay";
-                                        return;
-                                    }
-                                    
-                                    var tl = document.getElementById('time-left');
-                                    if(tl) tl.innerText = "已结束";
-                                    
-                                    var winnerDisplay = data.winner_name || "未知";
-                                    var statusHtml = "拍卖已结束。中标者: " + winnerDisplay;
-                                    if (data.order_hash) {
-                                        statusHtml += `<div class="mt-2 pt-2 border-top">
-                                            <strong>订单编号:</strong>
-                                            <div class="font-monospace small bg-light p-1 border rounded user-select-all">
-                                                ${data.order_hash}
-                                            </div>
-                                        </div>`;
-                                    }
-                                    
-                                    var sa = document.getElementById('status-alert');
-                                    if(sa) {
-                                        sa.innerHTML = statusHtml;
-                                        sa.className = "alert alert-secondary mt-3";
-                                    }
-                                    
-                                    var bfc = document.getElementById('bid-form-container');
-                                    if (bfc) bfc.style.display = 'none';
-                                }
-                            })
-                            .catch(e => console.error(e));
-                     }, 2000);
-                }
+                timerEl.innerText = "时间到 (等待服务器结算...)";
                 return;
             }
             

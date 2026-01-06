@@ -33,9 +33,7 @@ def check_auctions(app):
                     socketio.emit('auction_ended', {
                         'item_id': item.id, 
                         'winner': winner_name,
-                        'winner_id': item.highest_bidder_id,
-                        # order_hash is private, do not broadcast to public room
-                        'order_hash': None 
+                        'order_hash': item.order_hash if item.highest_bidder_id else None
                     }, room=f"item_{item.id}")
                     
                     # 通知卖家 (出售结果)
@@ -120,4 +118,4 @@ def check_auctions(app):
 
         except Exception as e:
             print(f"Check auction error: {e}")
-        time.sleep(3) 
+        time.sleep(10) 

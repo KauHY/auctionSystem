@@ -82,19 +82,3 @@ CREATE TABLE chat_sessions (
     FOREIGN KEY (buyer_id) REFERENCES users(id),
     FOREIGN KEY (seller_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE chat_messages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    session_id INT NOT NULL,
-    sender_id INT NOT NULL,
-    receiver_id INT NOT NULL,
-    content TEXT NOT NULL,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    
-    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (sender_id) REFERENCES users(id),
-    FOREIGN KEY (receiver_id) REFERENCES users(id),
-    INDEX idx_session_id (session_id),
-    INDEX idx_sender_id (sender_id),
-    INDEX idx_receiver_id (receiver_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
