@@ -196,30 +196,35 @@
             // 显示 Toast
             var toastEl = document.getElementById('notificationToast');
             if (toastEl) {
+                // Reset styling to primary (blue)
                 var headerEl = toastEl.querySelector('.toast-header');
-                var titleEl = toastEl.querySelector('.toast-header strong');
-                
-                // 根据消息类型设置颜色
-                if (data.type === 'success') {
-                    headerEl.className = 'toast-header bg-success text-white';
-                    if(titleEl) titleEl.innerText = "审核通过"; 
-                } else if (data.type === 'warning') {
-                    headerEl.className = 'toast-header bg-warning text-dark';
-                    if(titleEl) titleEl.innerText = "申请被拒绝";
-                } else {
-                    // 默认蓝色
-                    headerEl.className = 'toast-header bg-primary text-white';
-                    if(titleEl) titleEl.innerText = "新消息提醒";
-                }
+                headerEl.className = 'toast-header bg-primary text-white';
                 
                 document.getElementById('notificationBody').innerText = data.msg;
+                var titleEl = toastEl.querySelector('.toast-header strong');
+                if(titleEl) titleEl.innerText = "新消息提醒";
                 
                 var toast = new bootstrap.Toast(toastEl);
                 toast.show();
             }
         });
 
+        // 监听拍卖被批准通知
+        socket.on('auction_approved', function(data) {
+            var toastEl = document.getElementById('notificationToast');
+            if (toastEl) {
+                // Change styling to success (green)
+                var headerEl = toastEl.querySelector('.toast-header');
+                headerEl.className = 'toast-header bg-success text-white';
 
+                document.getElementById('notificationBody').innerText = data.msg;
+                var titleEl = toastEl.querySelector('.toast-header strong');
+                if(titleEl) titleEl.innerText = "审核通过";
+                
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
 
         // 全局监听管理员通知
         socket.on('new_pending_item', function(data) {
@@ -235,7 +240,29 @@
             }
         });
 
-
+        // 监听拍卖被拒绝通知
+        socket.on('auction_rejected', function(data) {
+            var toastEl = document.getElementById('notificationToast');
+            if (toastEl) {
+                // Change styling to danger (red) or keep warning based on preference, but usually rejection is substantial
+                // Let's stick to user request logic context: if they wanted green for success, maybe keep blue or separate color for reject?
+                // User asked for green for success. Rejection was not explicitly told to change color, but previously I made notificationToast primary(blue).
+                // Let's set it to original warning (yellow) or danger (red) to distinguish?
+                // User said "Previously it was yellow for reject". I changed basic notificationToast to blue. 
+                // So now I should probably dynamically set color.
+                
+                var headerEl = toastEl.querySelector('.toast-header');
+                headerEl.className = 'toast-header bg-warning text-dark'; // Back to yellow for rejection
+                
+                document.getElementById('notificationBody').innerText = data.msg;
+                // 将标题改为“申请被拒绝”或其他相关提示
+                var headerEl = toastEl.querySelector('.toast-header strong');
+                if(headerEl) headerEl.innerText = "申请被拒绝";
+                
+                var toast = new bootstrap.Toast(toastEl);
+                toast.show();
+            }
+        });
 
         // 监听拍卖结果通知 (通用)
         socket.on('auction_result_toast', function(data) {

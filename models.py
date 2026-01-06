@@ -85,17 +85,3 @@ class ChatSession(db.Model):
     item = db.relationship('Item')
     buyer = db.relationship('User', foreign_keys=[buyer_id])
     seller = db.relationship('User', foreign_keys=[seller_id])
-
-class ChatMessage(db.Model):
-    __tablename__ = 'chat_messages'
-    id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('chat_sessions.id'), nullable=False)
-    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    receiver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    content = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.now)
-
-    # Relationships
-    session = db.relationship('ChatSession')
-    sender = db.relationship('User', foreign_keys=[sender_id])
-    receiver = db.relationship('User', foreign_keys=[receiver_id])

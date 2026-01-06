@@ -2,10 +2,9 @@ from models import User, Item, ChatSession
 from extensions import db, socketio
 from datetime import datetime
 
-def send_system_message(item_id, receiver_id, content, msg_type='info'):
+def send_system_message(item_id, receiver_id, content):
     """
     发送系统消息（以管理员身份）到用户的收件箱
-    msg_type: 'info' (default), 'success', 'warning'
     """
     try:
         # 获取管理员账户
@@ -63,7 +62,7 @@ def send_system_message(item_id, receiver_id, content, msg_type='info'):
         
         # 发送实时通知以更新前端红点和弹窗
         try:
-            socketio.emit('new_chat_notification', {'msg': content, 'type': msg_type}, room=f"user_{receiver_id}")
+            socketio.emit('new_chat_notification', {'msg': content}, room=f"user_{receiver_id}")
         except Exception as e:
             print(f"Socket emit in send_system_message failed: {e}")
             

@@ -130,8 +130,9 @@ if __name__ == '__main__':
              except:
                  pass
 
-    # Start background task using socketio helper for better compatibility
-    socketio.start_background_task(check_auctions, app)
+    bg_thread = threading.Thread(target=check_auctions, args=(app,))
+    bg_thread.daemon = True
+    bg_thread.start()
     
     # host='0.0.0.0' 使其他设备可访问
     socketio.run(app, host='0.0.0.0', port=5000, debug=True, allow_unsafe_werkzeug=True)
