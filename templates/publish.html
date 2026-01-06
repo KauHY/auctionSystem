@@ -6,7 +6,7 @@
         <div class="card mt-5">
             <div class="card-header">发布新拍品</div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" enctype="multipart/form-data">
                     <div class="mb-3">
                         <label for="name" class="form-label">商品名称</label>
                         <input type="text" class="form-control" id="name" name="name" required>
@@ -14,6 +14,12 @@
                     <div class="mb-3">
                         <label for="description" class="form-label">描述</label>
                         <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    <!-- 图片上传部分 -->
+                    <div class="mb-3">
+                        <label for="images" class="form-label">商品图片</label>
+                        <input type="file" class="form-control" id="images" name="images" accept="image/*" multiple>
+                        <div class="form-text">支持多选，上传清晰图片有助于成交。</div>
                     </div>
                     <div class="mb-3">
                         <label for="start_price" class="form-label">起拍价 (¥)</label>

@@ -11,10 +11,13 @@
     {% for item in items %}
     <div class="col-md-4 mb-4">
         <div class="card h-100">
-            <!-- 图片占位符 -->
-            <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
-                暂无图片
-            </div>
+            {% if item.images and item.images|length > 0 %}
+                <img src="{{ url_for('static', filename=item.images[0].image_url) }}" class="card-img-top" alt="{{ item.name }}" style="height: 200px; object-fit: cover;">
+            {% else %}
+                <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
+                    暂无图片
+                </div>
+            {% endif %}
             <div class="card-body">
                 <h5 class="card-title">{{ item.name }}</h5>
                 <p class="card-text text-truncate">{{ item.description }}</p>

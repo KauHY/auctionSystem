@@ -3,9 +3,31 @@
 {% block content %}
 <div class="row mt-4">
     <div class="col-md-6">
-        <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 400px;">
-            <h1>商品图片</h1>
+        {% if item.images and item.images|length > 0 %}
+        <div id="itemCarousel" class="carousel slide" data-bs-ride="carousel">
+            <div class="carousel-inner">
+                {% for img in item.images %}
+                <div class="carousel-item {% if loop.first %}active{% endif %}">
+                    <img src="{{ url_for('static', filename=img.image_url) }}" class="d-block w-100" alt="{{ item.name }}" style="max-height: 500px; object-fit: contain; background-color: #333;">
+                </div>
+                {% endfor %}
+            </div>
+            {% if item.images|length > 1 %}
+            <button class="carousel-control-prev" type="button" data-bs-target="#itemCarousel" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Previous</span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#itemCarousel" data-bs-slide="next">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                <span class="visually-hidden">Next</span>
+            </button>
+            {% endif %}
         </div>
+        {% else %}
+        <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 400px;">
+            <h1>暂无图片</h1>
+        </div>
+        {% endif %}
     </div>
     <div class="col-md-6">
         <h2 id="item-name">{{ item.name }}</h2>

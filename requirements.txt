@@ -3,3 +3,5 @@ Flask-SocketIO
 Flask-SQLAlchemy
 Flask-Login
 eventlet
+pymysql
+cryptography
