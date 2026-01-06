@@ -56,7 +56,10 @@
         
         <div class="card bg-light mb-3">
             <div class="card-body">
-                <h4 class="card-title">当前最高价: ¥<span id="current-price">{{ item.current_price }}</span></h4>
+                <h4 class="card-title">
+                    当前最高价: ¥<span id="current-price">{{ item.current_price }}</span>
+                    <small class="text-muted fs-6"> (加价幅度: ¥{{ item.increment }})</small>
+                </h4>
                 <p class="card-text">
                     最高出价者: <span id="highest-bidder">
                         {% if item.highest_bidder %}
@@ -150,110 +153,171 @@
         modal.show();
     }
 
-    // var socket = io(); // Removed to use shared socket
-    var itemId = {{ item.id }};
-    var endTime = new Date("{{ item.end_time.isoformat() }}");
-    var status = "{{ item.status }}";
+    (function() {
+        console.log("Item logic initialized");
+        var itemId = {{ item.id }};
+        var endTimeStr = "{{ item.end_time.isoformat() }}"; // Obtain string first
+        var endTime = new Date(endTimeStr);
+        var status = "{{ item.status }}".trim();
 
-    // 加入房间
-    socket.on('connect', function() {
-        console.log('已连接服务器');
-        socket.emit('join', {room: 'item_' + itemId});
-    });
-
-    // 监听价格更新
-    socket.on('price_update', function(data) {
-        console.log('价格更新:', data);
-        
-        // 更新价格显示
-        document.getElementById('current-price').innerText = data.new_price;
-        document.getElementById('highest-bidder').innerText = data.bidder_name;
-        
-        // 更新倒计时
-        endTime = new Date(data.new_end_time); 
-        
-        // 闪烁提示
-        var priceEl = document.getElementById('current-price');
-        priceEl.style.color = 'red';
-        setTimeout(() => { priceEl.style.color = ''; }, 500);
-
-        if (data.extended) {
-            alert('有人在最后时刻出价，拍卖延长5分钟！');
+        // Check socket
+        if (typeof socket === 'undefined') {
+            console.error("Socket not defined. Make sure base.html loads it.");
+        } else {
+            console.log("Socket found. Status: " + (socket.connected ? "Connected" : "Disconnected"));
         }
-        
-        // 添加日志（可选）
-        var logArea = document.getElementById('log-area');
-        logArea.style.display = 'block';
-        logArea.innerHTML = `<p class="small text-muted mb-0">${new Date().toLocaleTimeString()} - ${data.bidder_name} 出价 ¥${data.new_price}</p>` + logArea.innerHTML;
-    });
 
-    // 监听错误
-    socket.on('error', function(data) {
-        alert(data.msg);
-    });
-    
-    // 监听结束
-    socket.on('auction_ended', function(data) {
-        status = 'ended';
-        var statusHtml = "拍卖已结束。中标者: " + data.winner;
-        
-        if (data.order_hash) {
-            statusHtml += `<div class="mt-2 pt-2 border-top">
-                            <strong>订单编号:</strong>
-                            <div class="font-monospace small bg-light p-1 border rounded user-select-all">
-                                ${data.order_hash}
-                            </div>
-                        </div>`;
+        function joinItemRoom() {
+            if(socket && socket.connected) {
+                console.log('Joining room: item_' + itemId);
+                socket.emit('join', {room: 'item_' + itemId});
+            } else {
+                console.log('Socket not connected, cannot join yet');
+            }
         }
-        
-        document.getElementById('status-alert').innerHTML = statusHtml;
-        document.getElementById('status-alert').className = "alert alert-secondary mt-3";
-        if (document.getElementById('bid-form-container')) {
-            document.getElementById('bid-form-container').style.display = 'none';
-        }
-    });
 
-    // 发送出价
-    var bidBtn = document.getElementById('btn-bid');
-    if (bidBtn) {
-        bidBtn.onclick = function() {
-            var amount = document.getElementById('bid-amount').value;
-            if (!amount) return;
-            socket.emit('bid', {
-                item_id: itemId,
-                amount: amount,
-                user_id: {{ current_user.id if current_user.is_authenticated else 'null' }}
+        // Logic to run when socket connects or if already connected
+        if (socket) {
+            if (socket.connected) {
+                joinItemRoom();
+            }
+
+            socket.on('connect', function() {
+                console.log('Socket connected event');
+                joinItemRoom();
             });
-            document.getElementById('bid-amount').value = '';
-        };
-    }
 
-    // 倒计时逻辑
-    function updateTimer() {
-        if (status !== 'active') return;
-        
-        var now = new Date();
-        var diff = endTime - now;
-        
-        if (diff <= 0) {
-            document.getElementById('time-left').innerText = "时间到 (等待服务器结算...)";
-            return;
+            // 监听价格更新
+            socket.on('price_update', function(data) {
+                console.log('Price Sync:', data);
+                
+                // 更新价格显示
+                var priceEl = document.getElementById('current-price');
+                if(priceEl) {
+                    priceEl.innerText = data.new_price;
+                    priceEl.style.color = 'red';
+                    setTimeout(() => { priceEl.style.color = ''; }, 500);
+                }
+                
+                var bidderEl = document.getElementById('highest-bidder');
+                if(bidderEl) bidderEl.innerText = data.bidder_name;
+                
+                // 更新倒计时
+                if(data.new_end_time) {
+                   endTime = new Date(data.new_end_time); 
+                }
+
+                if (data.extended) {
+                    alert('有人在最后时刻出价，拍卖延长5分钟！');
+                }
+                
+                // 添加日志
+                var logArea = document.getElementById('log-area');
+                if(logArea) {
+                    logArea.style.display = 'block';
+                    logArea.innerHTML = `<p class="small text-muted mb-0">${new Date().toLocaleTimeString()} - ${data.bidder_name} 出价 ¥${data.new_price}</p>` + logArea.innerHTML;
+                }
+            });
+
+            // 监听错误
+            socket.on('error', function(data) {
+                console.error("Socket error:", data);
+                alert(data.msg);
+            });
+            
+            // 监听结束
+            socket.on('auction_ended', function(data) {
+                status = 'ended';
+                var statusHtml = "拍卖已结束。中标者: " + data.winner;
+                
+                if (data.order_hash) {
+                    statusHtml += `<div class="mt-2 pt-2 border-top">
+                                    <strong>订单编号:</strong>
+                                    <div class="font-monospace small bg-light p-1 border rounded user-select-all">
+                                        ${data.order_hash}
+                                    </div>
+                                </div>`;
+                }
+                
+                var sa = document.getElementById('status-alert');
+                if(sa) {
+                    sa.innerHTML = statusHtml;
+                    sa.className = "alert alert-secondary mt-3";
+                }
+
+                var bfc = document.getElementById('bid-form-container');
+                if (bfc) {
+                    bfc.style.display = 'none';
+                }
+                
+                var tl = document.getElementById('time-left');
+                if(tl) tl.innerText = "已结束";
+            });
+        }
+
+        // 发送出价
+        var bidBtn = document.getElementById('btn-bid');
+        if (bidBtn) {
+            // Clone to remove old listeners
+            var newBtn = bidBtn.cloneNode(true);
+            bidBtn.parentNode.replaceChild(newBtn, bidBtn);
+
+            newBtn.onclick = function() {
+                var amountInput = document.getElementById('bid-amount');
+                var amount = amountInput.value;
+                if (!amount) {
+                    alert('请输入金额');
+                    return;
+                }
+                
+                if(!socket || !socket.connected) {
+                    alert('未连接到服务器，无法出价');
+                    return;
+                }
+
+                socket.emit('bid', {
+                    item_id: itemId,
+                    amount: amount,
+                    user_id: {{ current_user.id if current_user.is_authenticated else 'null' }}
+                });
+                amountInput.value = '';
+            };
+        }
+
+        // 倒计时逻辑
+        function updateTimer() {
+            if (status !== 'active') return;
+            
+            var now = new Date();
+            var diff = endTime - now;
+            var timerEl = document.getElementById('time-left');
+            
+            if (!timerEl) return;
+
+            if (diff <= 0) {
+                timerEl.innerText = "时间到 (等待服务器结算...)";
+                return;
+            }
+            
+            var days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            var hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            var seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            var timeString = "";
+            if (days > 0) timeString += days + " 天 ";
+            if (hours > 0 || days > 0) timeString += hours + " 小时 ";
+            timeString += minutes + " 分 " + seconds + " 秒";
+
+            timerEl.innerText = "剩余 " + timeString;
         }
         
-        var days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        var hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        var minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        var seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
-        var timeString = "";
-        if (days > 0) timeString += days + " 天 ";
-        if (hours > 0 || days > 0) timeString += hours + " 小时 ";
-        timeString += minutes + " 分 " + seconds + " 秒";
+        // Timer Start
+        if(status === 'active') {
+             setInterval(updateTimer, 1000);
+             updateTimer(); 
+        }
 
-        document.getElementById('time-left').innerText = "剩余 " + timeString;
-    }
-    
-    setInterval(updateTimer, 1000);
-    updateTimer(); // 立即执行一次
+    })();
 </script>
 {% endblock %}

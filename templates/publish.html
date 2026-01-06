@@ -26,6 +26,11 @@
                         <input type="number" step="0.01" class="form-control" id="start_price" name="start_price" required>
                     </div>
                     <div class="mb-3">
+                        <label for="increment" class="form-label">加价幅度 (¥)</label>
+                        <input type="number" step="0.01" class="form-control" id="increment" name="increment" value="10" required>
+                        <div class="form-text">每次出价增加的最小金额。</div>
+                    </div>
+                    <div class="mb-3">
                         <label for="start_time" class="form-label">期望开拍时间 (留空则审核后立即开始)</label>
                         <input type="datetime-local" class="form-control" id="start_time" name="start_time">
                     </div>

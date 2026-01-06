@@ -8,6 +8,7 @@ from sqlalchemy import text
 from extensions import db, socketio
 from models import User, Item, ItemImage, Post, Bid
 import query
+from services import send_system_message
 
 def register_views(app):
 
@@ -116,6 +117,7 @@ def register_views(app):
             name = request.form.get('name')
             description = request.form.get('description')
             start_price_val = request.form.get('start_price')
+            increment_val = request.form.get('increment', '10')
             duration_val = request.form.get('duration')
 
             if not name or not description or not start_price_val or not duration_val:
@@ -124,6 +126,7 @@ def register_views(app):
 
             try:
                 start_price = float(start_price_val)
+                increment = float(increment_val)
                 duration = int(duration_val)
             except ValueError:
                 flash('价格或时长格式无效')
@@ -154,6 +157,7 @@ def register_views(app):
                 description=description,
                 start_price=start_price,
                 current_price=start_price,
+                increment=increment,
                 start_time=start_time,
                 end_time=end_time,
                 status='pending' 
@@ -255,6 +259,17 @@ def register_views(app):
             flash('已批准并立即开拍')
         
         db.session.commit()
+        
+        # Notify seller via SocketIO
+        msg_content = f'您的拍品 "{item.name}" 已通过审核并上架！'
+        socketio.emit('auction_approved', {
+            'item_name': item.name,
+            'msg': msg_content
+        }, room=f"user_{item.seller_id}")
+        
+        # 发送系统私信
+        send_system_message(item.id, item.seller_id, msg_content)
+        
         return redirect(url_for('admin_dashboard'))
 
     @app.route('/reject/<int:item_id>', methods=['POST'])
@@ -271,11 +286,15 @@ def register_views(app):
         db.session.commit()
         
         # Notify seller via SocketIO
+        msg_content = f'您的拍品 "{item.name}" 已被拒绝。理由: {reason}'
         socketio.emit('auction_rejected', {
             'item_name': item.name,
             'reason': reason,
-            'msg': f'您的拍品 "{item.name}" 已被拒绝。理由: {reason}'
+            'msg': msg_content
         }, room=f"user_{item.seller_id}")
+        
+        # 发送系统私信
+        send_system_message(item.id, item.seller_id, msg_content)
         
         flash('已拒绝并在卖家端发送通知')
         return redirect(url_for('admin_dashboard'))
@@ -296,6 +315,9 @@ def register_views(app):
             # 如果正在进行，通知房间内用户
             socketio.emit('error', {'msg': '管理员已强制终止此拍卖'}, room=f"item_{item.id}")
             socketio.emit('auction_ended', {'item_id': item.id, 'winner': '管理员终止'}, room=f"item_{item.id}")
+            
+            # 发送系统私信给卖家
+            send_system_message(item.id, item.seller_id, f'您的拍品 "{item.name}" 已被管理员强制终止。')
             
             flash(f'已强制停止拍品: {item.name}')
         else:
