@@ -132,7 +132,9 @@
                     <h5>管理员审核</h5>
                     <p>请核对此商品信息（照片、描述、起拍价）是否合规。</p>
                     <div class="d-flex gap-2">
-                        <a href="{{ url_for('approve_item', item_id=item.id) }}" class="btn btn-success flex-grow-1">批准上架</a>
+                        <form action="{{ url_for('approve_item_action', item_id=item.id) }}" method="POST" class="flex-grow-1">
+                            <button type="submit" class="btn btn-success w-100">批准上架</button>
+                        </form>
                         <button type="button" class="btn btn-danger flex-grow-1" onclick="openRejectModal({{ item.id }})">拒绝申请</button>
                     </div>
                 </div>
