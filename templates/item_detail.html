@@ -44,11 +44,17 @@
                 <span class="text-muted small ms-2"><i class="bi bi-telephone"></i> {{ item.seller.phone }}</span>
                 {% endif %}
             </a>
-            {% if current_user.is_authenticated and current_user.id != item.seller.id %}
-            <a href="{{ url_for('start_chat', item_id=item.id, other_user_id=item.seller.id) }}" class="btn btn-sm btn-outline-primary ms-3">
-                <i class="bi bi-chat-dots"></i> 联系卖家
-            </a>
-            {% endif %}
+                        {% if current_user.is_authenticated and current_user.id != item.seller.id %}
+                            {% if current_user.role == 'admin' or current_user.is_verified %}
+                                <a href="{{ url_for('start_chat', item_id=item.id, other_user_id=item.seller.id) }}" class="btn btn-sm btn-outline-primary ms-3">
+                                        <i class="bi bi-chat-dots"></i> 联系卖家
+                                </a>
+                            {% else %}
+                                <a href="{{ url_for('verify_identity') }}" class="btn btn-sm btn-warning ms-3">
+                                        <i class="bi bi-shield-exclamation"></i> 您尚未实名认证，去认证
+                                </a>
+                            {% endif %}
+                        {% endif %}
         </div>
         <p>{{ item.description }}</p>
         
@@ -118,15 +124,26 @@
                     {% endif %}
                 </div>
 
-                {% if current_user.is_authenticated and current_user.role == 'buyer' and item.status == 'active' %}
-                <div id="bid-form-container">
-                    <div class="input-group mb-3">
-                        <span class="input-group-text">¥</span>
-                        <input type="number" class="form-control" id="bid-amount" placeholder="输入出价金额">
-                        <button class="btn btn-danger" type="button" id="btn-bid">立即出价</button>
-                    </div>
-                    <div class="form-text">每次加价幅度: ¥{{ item.increment }}</div>
-                </div>
+                                {% if current_user.is_authenticated and current_user.role == 'buyer' and item.status == 'active' %}
+                                    {% if is_banned %}
+                                    <div class="alert alert-warning">
+                                        由于未付款记录，您的账户已被封禁至 <strong>{{ current_user.banned_until.strftime('%Y-%m-%d %H:%M') }}</strong>，暂无法参与出价或缴纳保证金。
+                                    </div>
+                                    {% elif has_deposit %}
+                                    <div id="bid-form-container">
+                                            <div class="input-group mb-3">
+                                                    <span class="input-group-text">¥</span>
+                                                    <input type="number" class="form-control" id="bid-amount" placeholder="输入出价金额">
+                                                    <button class="btn btn-danger" type="button" id="btn-bid">立即出价</button>
+                                            </div>
+                                            <div class="form-text">每次加价幅度: ¥{{ item.increment }}</div>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-primary">
+                                        为保障交易安全，参与本拍品竞价需先缴纳保证金：<strong>¥{{ deposit_amount }}</strong>
+                                        <a href="{{ url_for('deposit_item', item_id=item.id) }}" class="btn btn-sm btn-outline-primary ms-2">前往缴纳</a>
+                                    </div>
+                                    {% endif %}
                 {% elif current_user.is_authenticated and current_user.role == 'admin' and item.status == 'pending' %}
                 <div class="alert alert-warning">
                     <h5>管理员审核</h5>

@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}我的钱包{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3 class="mb-3">我的钱包</h3>
+  <div class="card mb-3">
+    <div class="card-body">
+      <p class="mb-1"><strong>可用余额：</strong> <span class="fw-bold text-success">¥{{ balance }}</span></p>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <h5 class="mb-3">充值</h5>
+      <form method="post" class="row g-3">
+        <div class="col-auto">
+          <input type="number" step="0.01" min="0.01" class="form-control" name="amount" placeholder="输入充值金额" required>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary">立即充值</button>
+        </div>
+      </form>
+      <p class="text-muted mt-3">提示：本系统为演示环境，充值直接生效。</p>
+    </div>
+  </div>
+
+    <div class="card mt-4">
+      <div class="card-body">
+        <h5 class="mb-3">最近交易</h5>
+        <div class="table-responsive">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>收支</th>
+                <th>金额</th>
+                <th>余额</th>
+                <th>拍品</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for tx in transactions %}
+              <tr>
+                <td>{{ tx.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td><span class="badge {{ wallet_type_badge(tx.type) }}">{{ wallet_type_label(tx.type) }}</span></td>
+                <td><span class="badge {{ tx.direction == 'credit' and 'bg-success' or 'bg-danger' }}">{{ wallet_direction_label(tx.direction) }}</span></td>
+                <td class="{{ tx.direction == 'credit' and 'text-success' or 'text-danger' }}">{{ tx.direction == 'credit' and '+' or '-' }}¥{{ tx.amount }}</td>
+                <td>¥{{ tx.balance_after }}</td>
+                <td>{% if tx.item %}<a href="{{ url_for('item_detail', item_id=tx.item.id) }}">{{ tx.item.name }}</a>{% else %}-{% endif %}</td>
+                <td>{{ tx.description or '-' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+</div>
+{% endblock %}

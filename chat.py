@@ -10,6 +10,10 @@ def register_chat_routes(app):
     @app.route('/inbox')
     @login_required
     def inbox():
+        # 未实名认证仅能浏览首页，禁止查看私信
+        if not getattr(current_user, 'is_verified', False) and current_user.role != 'admin':
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         # 获取我参与的所有会话，按时间倒序
         sessions = ChatSession.query.filter(
             or_(ChatSession.buyer_id == current_user.id, ChatSession.seller_id == current_user.id)
@@ -20,6 +24,9 @@ def register_chat_routes(app):
     @app.route('/chat/<int:item_id>/<int:other_user_id>')
     @login_required
     def start_chat(item_id, other_user_id):
+        if not getattr(current_user, 'is_verified', False) and current_user.role != 'admin':
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         item = Item.query.get_or_404(item_id)
         other_user = User.query.get_or_404(other_user_id)
         
@@ -75,6 +82,9 @@ def register_chat_events(socketio):
 
     @socketio.on('send_message')
     def on_send_message(data):
+        # 未实名认证禁止发送消息
+        if not getattr(current_user, 'is_verified', False) and current_user.role != 'admin':
+            return
         room = data.get('room')
         msg = data.get('msg')
         item_id = data.get('item_id')

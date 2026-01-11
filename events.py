@@ -3,7 +3,7 @@ from flask_socketio import emit, join_room
 from flask_login import current_user
 from datetime import datetime, timedelta
 from extensions import db, socketio
-from models import Item, Bid
+from models import Item, Bid, Deposit
 from decimal import Decimal
 
 def register_events(socketio):
@@ -29,8 +29,17 @@ def register_events(socketio):
     def on_bid(data):
         if not current_user.is_authenticated:
             return
-            
+        # 未实名认证限制出价
+        if not getattr(current_user, 'is_verified', False):
+            emit('error', {'msg': '请先完成实名认证后再参与出价'}, room=request.sid)
+            return
+        # 未缴纳保证金限制出价
         item_id = data['item_id']
+        dep = Deposit.query.filter_by(item_id=item_id, user_id=current_user.id, status='frozen').first()
+        if dep is None:
+            emit('error', {'msg': '参与竞价需先缴纳保证金，请前往拍品页面缴纳后再试。'}, room=request.sid)
+            return
+        
         # 使用 Decimal 处理金额
         try:
             amount = Decimal(str(data['amount']))

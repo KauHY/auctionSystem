@@ -9,6 +9,8 @@ import threading
 import pymysql
 import os
 from sqlalchemy import text
+import logging
+from logging.handlers import RotatingFileHandler
 
 # 确保pymysql可以被SQLAlchemy作为mysqldb使用
 pymysql.install_as_MySQLdb()
@@ -25,11 +27,26 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
     
     # --- 数据库配置 (请根据实际情况修改) ---
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456@localhost/Auction'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:12345@localhost/Auction'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+    # 日志目录与文件
+    logs_dir = os.path.join(basedir, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+
+    # 配置文件滚动日志（最大2MB，保留5个备份）
+    file_handler = RotatingFileHandler(os.path.join(logs_dir, 'app.log'), maxBytes=2 * 1024 * 1024, backupCount=5, encoding='utf-8')
+    formatter = logging.Formatter('%(asctime)s %(levelname)s [%(name)s] %(message)s')
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+    # 根据调试模式调整日志级别
+    app.logger.setLevel(logging.DEBUG if app.debug else logging.INFO)
+
     db.init_app(app)
-    socketio.init_app(app)
+    # 启用 Socket.IO 日志，便于排查实时事件问题
+    socketio.init_app(app, logger=True, engineio_logger=True)
     login_manager.init_app(app)
     login_manager.login_view = 'login'
     
@@ -54,16 +71,16 @@ if __name__ == '__main__':
         try:
             db.session.execute(text("ALTER TABLE items ADD COLUMN rejection_reason VARCHAR(255)"))
             db.session.commit()
-            print(">>> 成功添加 rejection_reason 字段")
+            app.logger.info("成功添加 rejection_reason 字段")
         except Exception as e:
             # 忽略错误，假设字段已存在
-            print(f">>> 尝试添加字段跳过 (可能已存在): {e}")
+            app.logger.debug(f"尝试添加字段跳过 (可能已存在): {e}")
 
         # 尝试自动迁移添加 order_hash 字段 (如果不存在)
         try:
             db.session.execute(text("ALTER TABLE items ADD COLUMN order_hash VARCHAR(64)"))
             db.session.commit()
-            print(">>> 成功添加 order_hash 字段")
+            app.logger.info("成功添加 order_hash 字段")
         except Exception as e:
             pass 
 
@@ -71,7 +88,7 @@ if __name__ == '__main__':
         try:
             db.session.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(20)"))
             db.session.commit()
-            print(">>> 成功添加 phone 字段")
+            app.logger.info("成功添加 phone 字段")
         except Exception as e:
             pass 
 
@@ -79,7 +96,7 @@ if __name__ == '__main__':
         try:
             db.session.execute(text("ALTER TABLE users ADD COLUMN avatar VARCHAR(200)"))
             db.session.commit()
-            print(">>> 成功添加 avatar 字段")
+            app.logger.info("成功添加 avatar 字段")
         except Exception as e:
             pass
 
@@ -87,7 +104,27 @@ if __name__ == '__main__':
         try:
             db.session.execute(text("ALTER TABLE users ADD COLUMN banned_until DATETIME"))
             db.session.commit()
-            print(">>> 成功添加 banned_until 字段")
+            app.logger.info("成功添加 banned_until 字段")
+        except Exception as e:
+            pass
+
+        # 尝试自动迁移添加实名相关字段
+        try:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN real_name VARCHAR(80)"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN id_card VARCHAR(20)"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN is_verified BOOLEAN DEFAULT FALSE"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN verified_at DATETIME"))
+            db.session.commit()
+            app.logger.info("成功添加实名相关字段")
+        except Exception as e:
+            pass
+
+        # 钱包字段
+        try:
+            db.session.execute(text("ALTER TABLE users ADD COLUMN wallet_balance DECIMAL(10,2) DEFAULT 0.00"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN wallet_frozen DECIMAL(10,2) DEFAULT 0.00"))
+            db.session.commit()
+            app.logger.info("成功添加钱包字段")
         except Exception as e:
             pass
             
@@ -98,9 +135,9 @@ if __name__ == '__main__':
             db.session.execute(text("ALTER TABLE items ADD COLUMN shipping_phone VARCHAR(20)"))
             db.session.execute(text("ALTER TABLE items ADD COLUMN shipping_address VARCHAR(255)"))
             db.session.commit()
-            print(">>> 成功添加支付和物流字段")
+            app.logger.info("成功添加支付和物流字段")
         except Exception as e:
-            print(f">>> 尝试添加支付物流字段跳过 (可能已存在): {e}")
+            app.logger.debug(f"尝试添加支付物流字段跳过 (可能已存在): {e}")
 
         try:
             # 尝试创建一个默认管理员，防止数据库是空的
@@ -108,11 +145,11 @@ if __name__ == '__main__':
                 admin = User(username='admin', password_hash='123', role='admin')
                 db.session.add(admin)
                 db.session.commit()
-                print(">>> 检测到数据库中没有管理员，已自动创建: admin / 123")
+                app.logger.info("检测到数据库中没有管理员，已自动创建: admin / 123")
         except Exception as e:
             # 捕获连接错误打印出来，不中断主进程，但用户必须处理
-            print(f">>> 连接数据库失败或查询出错: {e}")
-            print(">>> 请检查 app.py 中的 SQLALCHEMY_DATABASE_URI配置，并确保MySQL服务已运行")
+            app.logger.error(f"连接数据库失败或查询出错: {e}")
+            app.logger.error("请检查 app.py 中的 SQLALCHEMY_DATABASE_URI配置，并确保MySQL服务已运行")
 
         # 尝试自动创建 Post 表 (如果是之前创建的数据库)
         try:
@@ -126,7 +163,7 @@ if __name__ == '__main__':
         except:
              try:
                  db.create_all()
-                 print(">>> 尝试创建新表 chat_sessions")
+                 app.logger.info("尝试创建新表 chat_sessions")
              except:
                  pass
 

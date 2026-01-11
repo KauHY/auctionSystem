@@ -2,6 +2,24 @@
 
 {% block content %}
 
+{% if current_user.is_authenticated and current_user.role != 'admin' and not current_user.is_verified %}
+<div class="alert alert-primary sticky-top" role="alert" style="z-index: 10;">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="me-3">
+            <i class="bi bi-shield-check"></i>
+            为保障交易安全，请完成实名认证。完成后即可参与出价、聊天与交易。
+        </div>
+        <div>
+            <a href="{{ url_for('verify_identity') }}" class="btn btn-sm btn-light text-primary fw-semibold">立即前往</a>
+        </div>
+    </div>
+    <div class="small text-muted mt-1">提示：未认证用户仅可浏览首页商品。</div>
+    <style>
+        .sticky-top { top: 60px; }
+    </style>
+    </div>
+{% endif %}
+
 <div class="row mb-4">
     <div class="col-md-8 offset-md-2">
         <form action="{{ url_for('index') }}" method="GET" class="d-flex">

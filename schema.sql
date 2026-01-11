@@ -10,6 +10,12 @@ CREATE TABLE users (
     phone VARCHAR(20),
     avatar VARCHAR(200),
     banned_until DATETIME,
+    real_name VARCHAR(80),
+    id_card VARCHAR(20),
+    is_verified BOOLEAN DEFAULT FALSE,
+    verified_at DATETIME,
+    wallet_balance DECIMAL(10, 2) DEFAULT 0.00,
+    wallet_frozen DECIMAL(10, 2) DEFAULT 0.00,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -111,4 +117,37 @@ CREATE TABLE appeals (
 
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 保证金记录
+CREATE TABLE deposits (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    item_id INT NOT NULL,
+    user_id INT NOT NULL,
+    amount DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'frozen', -- 'frozen', 'applied', 'refunded', 'forfeited'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_item_user (item_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 资金明细记录
+CREATE TABLE wallet_transactions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    item_id INT,
+    type VARCHAR(30) NOT NULL, -- recharge, deposit, refund, payment, forfeit, payout
+    direction VARCHAR(10) NOT NULL, -- credit, debit
+    amount DECIMAL(10, 2) NOT NULL,
+    balance_after DECIMAL(10, 2) NOT NULL,
+    description VARCHAR(255),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL,
+    INDEX idx_user_created (user_id, created_at),
+    INDEX idx_type_created (type, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

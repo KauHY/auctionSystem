@@ -13,6 +13,14 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), nullable=True) # 新增：联系电话
     avatar = db.Column(db.String(200), nullable=True) # 新增：用户头像文件名
     banned_until = db.Column(db.DateTime, nullable=True) # 新增：封禁截止时间
+    # 实名认证
+    real_name = db.Column(db.String(80), nullable=True)
+    id_card = db.Column(db.String(20), nullable=True)
+    is_verified = db.Column(db.Boolean, default=False)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    # 钱包
+    wallet_balance = db.Column(db.Numeric(10, 2), default=Decimal('0.00'))
+    wallet_frozen = db.Column(db.Numeric(10, 2), default=Decimal('0.00'))
     created_at = db.Column(db.DateTime, default=datetime.now)
 
 class Item(db.Model):
@@ -116,3 +124,31 @@ class Appeal(db.Model):
 
     item = db.relationship('Item', backref=db.backref('appeals', lazy=True, order_by="desc(Appeal.created_at)"))
     user = db.relationship('User', backref=db.backref('my_appeals', lazy=True))
+
+class Deposit(db.Model):
+    __tablename__ = 'deposits'
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    status = db.Column(db.String(20), default='frozen')  # frozen, applied, refunded, forfeited
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    item = db.relationship('Item')
+    user = db.relationship('User')
+
+class WalletTransaction(db.Model):
+    __tablename__ = 'wallet_transactions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), nullable=True)
+    type = db.Column(db.String(30), nullable=False)  # recharge, deposit, refund, payment, forfeit
+    direction = db.Column(db.String(10), nullable=False)  # credit, debit
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    balance_after = db.Column(db.Numeric(10, 2), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    user = db.relationship('User')
+    item = db.relationship('Item')

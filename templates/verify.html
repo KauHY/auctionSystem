@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}实名认证{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3 class="mb-3">实名认证</h3>
+  {% if view_only %}
+    <div class="card">
+      <div class="card-body">
+        <p><strong>认证状态：</strong> {{ '已认证' if is_verified else '未认证' }}</p>
+        {% if is_verified %}
+        <p><strong>真实姓名：</strong> {{ real_name or '—' }}</p>
+        <p><strong>身份证号：</strong> {{ id_card or '—' }}</p>
+        {% else %}
+        <p>该用户尚未完成实名认证。</p>
+        {% endif %}
+      </div>
+    </div>
+  {% else %}
+    {% if current_user.role == 'admin' %}
+      <div class="alert alert-info">管理员无需实名认证。</div>
+    {% endif %}
+    <form method="post" class="card">
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label">真实姓名</label>
+          <input name="real_name" class="form-control" required />
+        </div>
+        <div class="mb-3">
+          <label class="form-label">身份证号</label>
+          <input name="id_card" class="form-control" maxlength="18" required />
+          <div class="form-text">请输入 18 位身份证号，最后一位可为 X。</div>
+        </div>
+        <button type="submit" class="btn btn-primary">提交认证</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

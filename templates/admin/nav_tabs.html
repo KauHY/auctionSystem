@@ -21,4 +21,7 @@
   <li class="nav-item">
     <a class="nav-link {{ 'active' if active_tab == 'history' else '' }}" href="{{ url_for('admin_history') }}">历史记录</a>
   </li>
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if active_tab == 'wallet' else '' }}" href="{{ url_for('admin_wallet_transactions') }}">用户资金明细</a>
+  </li>
 </ul>

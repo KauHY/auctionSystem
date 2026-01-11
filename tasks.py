@@ -3,7 +3,7 @@ import threading
 import time
 import hashlib
 from extensions import db, socketio
-from models import Item, Bid
+from models import Item, Bid, Deposit
 from services import send_system_message
 
 def check_auctions(app):
@@ -52,6 +52,37 @@ def check_auctions(app):
                             'msg': f'【恭喜中标】您已成功拍下 "{item.name}"，成交价 ¥{item.current_price}！'
                         }, room=f"user_{item.highest_bidder_id}")
                         
+                        # 保证金处理：未中标者自动退款
+                        loser_deposits = Deposit.query.filter(
+                            Deposit.item_id == item.id,
+                            Deposit.user_id != item.highest_bidder_id,
+                            Deposit.status == 'frozen'
+                        ).all()
+                        from models import WalletTransaction
+                        for ld in loser_deposits:
+                            ld.status = 'refunded'
+                            # 退款到余额
+                            user = ld.user
+                            try:
+                                from decimal import Decimal
+                                amt = Decimal(ld.amount)
+                                new_balance = (Decimal(user.wallet_balance) + amt)
+                                user.wallet_balance = new_balance
+                                db.session.add(WalletTransaction(
+                                    user_id=user.id,
+                                    item_id=item.id,
+                                    type='refund',
+                                    direction='credit',
+                                    amount=amt,
+                                    balance_after=new_balance,
+                                    description=f'未中标退还保证金：{item.name}'
+                                ))
+                                # 发送系统消息提醒退款
+                                send_system_message(item.id, user.id, f'拍品 "{item.name}" 竞拍失败，保证金 ¥{amt} 已退回您的钱包余额。')
+                            except Exception:
+                                pass
+                        db.session.commit()
+
                         # Toast: Losers (Yellow)
                         # 查找所有出过价但未获胜的用户
                         loser_bids = Bid.query.filter(
@@ -75,6 +106,33 @@ def check_auctions(app):
                             'type': 'info',
                             'msg': f'拍卖结束: "{item.name}" 无人出价，已流拍。'
                         }, room=f"user_{item.seller_id}")
+                        # 无人中标情况下，退还所有已缴保证金
+                        unsold_deps = Deposit.query.filter(
+                            Deposit.item_id == item.id,
+                            Deposit.status == 'frozen'
+                        ).all()
+                        from models import WalletTransaction
+                        for ld in unsold_deps:
+                            ld.status = 'refunded'
+                            user = ld.user
+                            try:
+                                from decimal import Decimal
+                                amt = Decimal(ld.amount)
+                                new_balance = (Decimal(user.wallet_balance) + amt)
+                                user.wallet_balance = new_balance
+                                db.session.add(WalletTransaction(
+                                    user_id=user.id,
+                                    item_id=item.id,
+                                    type='refund',
+                                    direction='credit',
+                                    amount=amt,
+                                    balance_after=new_balance,
+                                    description=f'流拍退还保证金：{item.name}'
+                                ))
+                                send_system_message(item.id, user.id, f'拍品 "{item.name}" 流拍，保证金 ¥{amt} 已退回您的钱包余额。')
+                            except Exception:
+                                pass
+                        db.session.commit()
                     
                 # 2. 检查已到期的 'approved' 拍卖 (定时上架) -> 'active'
 
@@ -106,6 +164,11 @@ def check_auctions(app):
                     if bidder:
                         ban_until = now + timedelta(days=30)
                         bidder.banned_until = ban_until
+                        # 违约：没收中标者保证金
+                        winner_dep = Deposit.query.filter_by(item_id=item.id, user_id=bidder.id).filter(Deposit.status.in_(['frozen','applied'])).first()
+                        if winner_dep:
+                                winner_dep.status = 'forfeited'
+                                # 保证金不返还，余额不变（已在缴纳时扣除）
                         
                         # 通知买家
                         send_system_message(item.id, bidder.id, f'【违规处罚】由于您在拍品 "{item.name}" 结束后24小时内未完成付款，系统判定为违约。您的账户已被禁止参与拍卖活动30天，解封时间：{ban_until.strftime("%Y-%m-%d %H:%M")}。')

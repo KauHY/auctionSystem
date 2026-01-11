@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}缴纳保证金{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <h3 class="mb-3">缴纳保证金</h3>
+  <div class="card mb-3">
+    <div class="card-body">
+      <p class="mb-1"><strong>拍品：</strong> {{ item.name }}</p>
+      <p class="mb-1"><strong>起拍价：</strong> ¥{{ item.start_price }}</p>
+      <p class="mb-1"><strong>需缴纳保证金：</strong> <span class="fw-bold text-primary">¥{{ amount }}</span></p>
+      <p class="text-muted small">分层规则：0–999 收取 min(起拍价, ¥20)；1000–9999 收取 ¥100；10000+ 收取起拍价的 1% 封顶 ¥1000。</p>
+       <div class="alert alert-info py-2 mt-2">
+         若您已缴纳保证金，则最终付款时将无需支付此部分。若竞拍失败，保证金将会退还给您。
+       </div>
+      {% if balance is defined %}
+      <hr>
+      <p class="mb-1"><strong>钱包余额：</strong> <span class="fw-bold">¥{{ balance }}</span></p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      {% if balance is defined and balance < amount %}
+        <div class="alert alert-warning">钱包余额不足，无法冻结保证金。请先充值。</div>
+        <a href="{{ url_for('wallet') }}" class="btn btn-primary">去钱包充值</a>
+        <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-outline-secondary ms-2">返回拍品页</a>
+      {% else %}
+        <form method="post">
+          <button type="submit" class="btn btn-primary">立即缴纳保证金（钱包扣款）</button>
+          <a href="{{ url_for('item_detail', item_id=item.id) }}" class="btn btn-outline-secondary ms-2">取消</a>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -22,6 +22,18 @@
                 {% endif %}
                 <p class="card-text small text-muted">加入时间: {{ user.created_at.strftime('%Y-%m-%d') }}</p>
 
+                <p class="mt-2">
+                    <span class="badge {{ 'bg-success' if user.is_verified else 'bg-secondary' }}">
+                        {{ '已实名认证' if user.is_verified else '未实名认证' }}
+                    </span>
+                    {% if current_user.id == user.id and not user.is_verified and current_user.role != 'admin' %}
+                    <a href="{{ url_for('verify_identity') }}" class="btn btn-sm btn-warning ms-2">您尚未完成实名认证，请立即前往！</a>
+                    {% endif %}
+                    {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('admin_view_identity', user_id=user.id) }}" class="btn btn-sm btn-outline-primary ms-2">查看实名信息</a>
+                    {% endif %}
+                </p>
+
                 {% if current_user.is_authenticated and current_user.id == user.id %}
                 <div class="mt-3">
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#uploadAvatarForm" aria-expanded="false" aria-controls="uploadAvatarForm">

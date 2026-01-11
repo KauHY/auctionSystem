@@ -16,6 +16,18 @@ from io import BytesIO
 import base64
 
 def register_views(app):
+    # 保证金计算：分层额度
+    def compute_deposit_amount(item: Item) -> Decimal:
+        sp = Decimal(item.start_price)
+        if sp <= Decimal('999'):
+            amt = min(sp, Decimal('20'))
+        elif sp <= Decimal('9999'):
+            amt = Decimal('100')
+        else:
+            amt = (sp * Decimal('0.01'))
+            if amt > Decimal('1000'):
+                amt = Decimal('1000')
+        return amt.quantize(Decimal('0.01'))
 
     # --- 全局 Context Processor ---
     @app.context_processor
@@ -46,6 +58,36 @@ def register_views(app):
             except:
                 context['unread_chats_count'] = 0
                 
+        # 资金类型与方向映射供模板使用
+        def wallet_type_label(t: str) -> str:
+            mapping = {
+                'recharge': '充值',
+                'deposit': '保证金缴纳',
+                'refund': '保证金退款',
+                'payment': '订单支付',
+                'forfeit': '保证金没收',
+                'payout': '卖家入账',
+            }
+            return mapping.get(t, t or '')
+
+        def wallet_direction_label(d: str) -> str:
+            return '入账' if d == 'credit' else ('扣款' if d == 'debit' else (d or ''))
+
+        def wallet_type_badge(t: str) -> str:
+            classes = {
+                'recharge': 'bg-primary',
+                'deposit': 'bg-warning text-dark',
+                'refund': 'bg-success',
+                'payment': 'bg-danger',
+                'forfeit': 'bg-dark',
+                'payout': 'bg-success',
+            }
+            return classes.get(t, 'bg-secondary')
+
+        context['wallet_type_label'] = wallet_type_label
+        context['wallet_direction_label'] = wallet_direction_label
+        context['wallet_type_badge'] = wallet_type_badge
+
         return context
 
     @app.route('/')
@@ -107,6 +149,42 @@ def register_views(app):
                 return redirect(url_for('index'))
         return render_template('register.html')
 
+    @app.route('/verify', methods=['GET', 'POST'])
+    @login_required
+    def verify_identity():
+        if current_user.role == 'admin':
+            flash('管理员无需实名认证')
+            return redirect(url_for('index'))
+
+        if request.method == 'POST':
+            real_name = request.form.get('real_name', '').strip()
+            id_card = request.form.get('id_card', '').strip()
+
+            if not real_name or not id_card:
+                flash('请填写真实姓名和身份证号')
+                return render_template('verify.html')
+
+            import re
+            if not re.match(r'^\d{17}[\dXx]$', id_card):
+                flash('身份证号格式不正确')
+                return render_template('verify.html')
+
+            existing = User.query.filter_by(id_card=id_card, role=current_user.role, is_verified=True).first()
+            if existing and existing.id != current_user.id:
+                flash('该身份证号在当前角色已完成实名认证，无法重复认证')
+                return render_template('verify.html')
+
+            user = User.query.get(current_user.id)
+            user.real_name = real_name
+            user.id_card = id_card
+            user.is_verified = True
+            user.verified_at = datetime.now()
+            db.session.commit()
+            flash('实名认证成功')
+            return redirect(url_for('index'))
+
+        return render_template('verify.html')
+
     @app.route('/logout')
     @login_required
     def logout():
@@ -119,6 +197,13 @@ def register_views(app):
         if current_user.role != 'seller':
             flash('只有卖家可以发布商品')
             return redirect(url_for('index'))
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
+        # 封禁期间禁止缴纳保证金
+        if getattr(current_user, 'banned_until', None) and current_user.banned_until > datetime.now():
+            flash(f'由于未付款记录，您的账户已被封禁至 {current_user.banned_until.strftime("%Y-%m-%d %H:%M")}，暂无法缴纳保证金或参与拍卖。')
+            return redirect(url_for('item_detail', item_id=item_id))
         
         if request.method == 'POST':
             name = request.form.get('name')
@@ -212,6 +297,9 @@ def register_views(app):
         if current_user.role != 'seller':
             flash('只有卖家可以查看发布历史')
             return redirect(url_for('index'))
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         
         search_q = request.args.get('q', '')
         # 移至 query.py
@@ -221,16 +309,130 @@ def register_views(app):
     @app.route('/my_orders')
     @login_required
     def my_orders():
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         search_q = request.args.get('q', '')
         # 移至 query.py
         orders = query.get_buyer_won_items(Item, User, current_user.id, search_q)
         return render_template('my_orders.html', items=orders, search_query=search_q)
 
+    @app.route('/wallet', methods=['GET', 'POST'])
+    @login_required
+    def wallet():
+        if request.method == 'POST':
+            amount_str = request.form.get('amount', '0').strip()
+            try:
+                amount = Decimal(amount_str).quantize(Decimal('0.01'))
+            except Exception:
+                flash('充值金额格式不正确')
+                return redirect(url_for('wallet'))
+            if amount <= Decimal('0.00'):
+                flash('充值金额必须大于 0')
+                return redirect(url_for('wallet'))
+            user = User.query.get(current_user.id)
+            from models import WalletTransaction
+            new_balance = (Decimal(user.wallet_balance) + amount).quantize(Decimal('0.01'))
+            user.wallet_balance = new_balance
+            tx = WalletTransaction(
+                user_id=user.id,
+                type='recharge',
+                direction='credit',
+                amount=amount,
+                balance_after=new_balance,
+                description='用户充值'
+            )
+            db.session.add(tx)
+            db.session.commit()
+            flash('充值成功，余额已更新')
+            return redirect(url_for('wallet'))
+        # 列出最近交易
+        from models import WalletTransaction
+        txs = WalletTransaction.query.filter_by(user_id=current_user.id).order_by(WalletTransaction.created_at.desc()).limit(50).all()
+        return render_template('wallet.html', balance=Decimal(current_user.wallet_balance), transactions=txs)
+
     @app.route('/item/<int:item_id>')
     @login_required
     def item_detail(item_id):
         item = Item.query.get_or_404(item_id)
-        return render_template('item_detail.html', item=item)
+        deposit_amount = None
+        has_deposit = False
+        is_banned = False
+        if current_user.is_authenticated and current_user.role == 'buyer':
+            try:
+                from models import Deposit
+                deposit_amount = compute_deposit_amount(item)
+                dep = Deposit.query.filter_by(item_id=item.id, user_id=current_user.id).filter(Deposit.status.in_(['frozen','applied'])).first()
+                has_deposit = dep is not None
+            except Exception:
+                has_deposit = False
+            # 计算封禁状态
+            try:
+                if getattr(current_user, 'banned_until', None) and current_user.banned_until > datetime.now():
+                    is_banned = True
+            except Exception:
+                is_banned = False
+        return render_template('item_detail.html', item=item, deposit_amount=deposit_amount, has_deposit=has_deposit, is_banned=is_banned)
+
+    @app.route('/item/<int:item_id>/deposit', methods=['GET', 'POST'])
+    @login_required
+    def deposit_item(item_id):
+        item = Item.query.get_or_404(item_id)
+        if current_user.role != 'buyer':
+            flash('仅买家可缴纳保证金')
+            return redirect(url_for('item_detail', item_id=item_id))
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
+
+        from models import Deposit
+        deposit_amount = compute_deposit_amount(item)
+        existing = Deposit.query.filter_by(item_id=item.id, user_id=current_user.id).filter(Deposit.status.in_(['frozen','applied'])).first()
+        if existing:
+            flash('您已为该拍品缴纳保证金，无需重复缴纳')
+            return redirect(url_for('item_detail', item_id=item_id))
+
+        # 钱包扣款冻结保证金
+        user = User.query.get(current_user.id)
+        balance = Decimal(user.wallet_balance).quantize(Decimal('0.01'))
+
+        if request.method == 'POST':
+            if balance < deposit_amount:
+                flash('钱包余额不足，无法冻结保证金。请先充值。')
+                return redirect(url_for('wallet'))
+            # 扣款（不再使用冻结）
+            from models import WalletTransaction
+            new_balance = (balance - deposit_amount).quantize(Decimal('0.01'))
+            user.wallet_balance = new_balance
+            dep = Deposit(item_id=item.id, user_id=current_user.id, amount=deposit_amount, status='frozen')
+            db.session.add(dep)
+            db.session.add(WalletTransaction(
+                user_id=user.id,
+                item_id=item.id,
+                type='deposit',
+                direction='debit',
+                amount=deposit_amount,
+                balance_after=new_balance,
+                description=f'缴纳拍品保证金: {item.name}'
+            ))
+            db.session.commit()
+            flash('若您已缴纳保证金，则最终付款时将无需支付此部分。若竞拍失败，保证金将会降退还给您。')
+            return redirect(url_for('item_detail', item_id=item_id))
+
+        return render_template('deposit.html', item=item, amount=deposit_amount, balance=balance)
+
+    @app.route('/item/<int:item_id>/confirm_deposit', methods=['POST'])
+    @login_required
+    def confirm_deposit(item_id):
+        item = Item.query.get_or_404(item_id)
+        from models import Deposit
+        dep = Deposit.query.filter_by(item_id=item.id, user_id=current_user.id).filter(Deposit.status=='frozen').order_by(Deposit.created_at.desc()).first()
+        if not dep:
+            flash('未找到待确认的保证金记录')
+            return redirect(url_for('deposit_item', item_id=item_id))
+        # 钱包流已在缴纳时完成，保持幂等提示一致
+        flash('若您已缴纳保证金，则最终付款时将无需支付此部分。若竞拍失败，保证金将会降退还给您。')
+        return redirect(url_for('item_detail', item_id=item_id))
 
     @app.route('/admin')
     @login_required
@@ -279,6 +481,85 @@ def register_views(app):
                                active_tab='active_items',
                                audit_count=audit_count,
                                appeal_pending_count=appeal_pending_count)
+
+    @app.route('/admin/wallet_transactions')
+    @login_required
+    def admin_wallet_transactions():
+        if current_user.role != 'admin':
+            return redirect(url_for('index'))
+        from models import WalletTransaction, User, Appeal
+        # Filters
+        q_user = request.args.get('user', '').strip()
+        q_type = request.args.get('type', '').strip()
+        q_start = request.args.get('start', '').strip()
+        q_end = request.args.get('end', '').strip()
+        page = request.args.get('page', '1')
+        per_page = request.args.get('per_page', '50')
+        try:
+            page = int(page) if str(page).isdigit() else 1
+        except:
+            page = 1
+        try:
+            per_page = int(per_page) if str(per_page).isdigit() else 50
+        except:
+            per_page = 50
+
+        query_tx = WalletTransaction.query
+        if q_user:
+            if q_user.isdigit():
+                query_tx = query_tx.filter(WalletTransaction.user_id == int(q_user))
+            else:
+                # 模糊匹配用户名
+                users = User.query.filter(User.username.like(f"%{q_user}%")).all()
+                user_ids = [u.id for u in users]
+                if user_ids:
+                    query_tx = query_tx.filter(WalletTransaction.user_id.in_(user_ids))
+                else:
+                    query_tx = query_tx.filter(WalletTransaction.user_id == -1)  # 返回空
+        if q_type:
+            query_tx = query_tx.filter(WalletTransaction.type == q_type)
+        if q_start:
+            try:
+                start_dt = datetime.strptime(q_start, '%Y-%m-%d')
+                query_tx = query_tx.filter(WalletTransaction.created_at >= start_dt)
+            except:
+                pass
+        if q_end:
+            try:
+                end_dt = datetime.strptime(q_end, '%Y-%m-%d') + timedelta(days=1) - timedelta(seconds=1)
+                query_tx = query_tx.filter(WalletTransaction.created_at <= end_dt)
+            except:
+                pass
+
+        total = query_tx.count()
+        query_tx = query_tx.order_by(WalletTransaction.created_at.desc())
+        transactions = query_tx.offset((page - 1) * per_page).limit(per_page).all()
+        pages = (total + per_page - 1) // per_page if per_page > 0 else 1
+        has_prev = page > 1
+        has_next = page < pages
+
+        # 复用 admin nav 模板结构
+        audit_count = Item.query.filter_by(status='pending').count()
+        appeal_pending_count = Appeal.query.filter_by(status='pending').count()
+        return render_template(
+            'admin/wallet_transactions.html',
+            transactions=transactions,
+            active_tab='wallet',
+            audit_count=audit_count,
+            appeal_pending_count=appeal_pending_count,
+            # filters
+            f_user=q_user,
+            f_type=q_type,
+            f_start=q_start,
+            f_end=q_end,
+            per_page=per_page,
+            # pagination
+            page=page,
+            pages=pages,
+            total=total,
+            has_prev=has_prev,
+            has_next=has_next
+        )
 
     @app.route('/admin/appeals')
     @login_required
@@ -488,6 +769,9 @@ def register_views(app):
         if item.seller_id != current_user.id:
             flash('无权操作')
             return redirect(url_for('inbox'))
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
             
         if item.status != 'stopped':
             flash('该拍品未处于强制下架状态，无需申诉')
@@ -589,6 +873,15 @@ def register_views(app):
             
         return render_template('user_profile.html', user=user, posts=posts, items=public_items)
 
+    @app.route('/admin/view_identity/<int:user_id>')
+    @login_required
+    def admin_view_identity(user_id):
+        if current_user.role != 'admin':
+            flash('权限不足')
+            return redirect(url_for('index'))
+        user = User.query.get_or_404(user_id)
+        return render_template('verify.html', view_only=True, real_name=user.real_name, id_card=user.id_card, is_verified=getattr(user, 'is_verified', False))
+
     @app.route('/update_avatar', methods=['POST'])
     @login_required
     def update_avatar():
@@ -638,6 +931,9 @@ def register_views(app):
     @login_required
     def pay_item(item_id):
         item = Item.query.get_or_404(item_id)
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         
         # Security checks
         if item.highest_bidder_id != current_user.id:
@@ -651,67 +947,109 @@ def register_views(app):
         if item.payment_status == 'paid':
             flash('该订单已支付')
             return redirect(url_for('item_detail', item_id=item_id))
-
         show_qr = False
-        wx_qr = None
-        ali_qr = None
+        deposit_amount = Decimal('0.00')
+        payable = Decimal(item.current_price).quantize(Decimal('0.01'))
+        from models import Deposit
+        dep = Deposit.query.filter_by(item_id=item.id, user_id=current_user.id).filter(Deposit.status.in_(['frozen','applied'])).first()
+        if dep:
+            deposit_amount = Decimal(dep.amount).quantize(Decimal('0.01'))
+            payable = (payable - deposit_amount)
+            if payable < Decimal('0.00'):
+                payable = Decimal('0.00')
 
         if request.method == 'POST':
-            # Identify if it is Step 1 (Address) or Step 2 (Confirm) - Wait, Step 2 is separate route? 
-            # In template I made them separate logic. Step 1 submits to same route.
-            
             shipping_name = request.form.get('shipping_name')
             shipping_phone = request.form.get('shipping_phone')
             shipping_address = request.form.get('shipping_address')
             
             if shipping_name and shipping_phone and shipping_address:
-                # Save first
+                # 保存收货信息
                 item.shipping_name = shipping_name
                 item.shipping_phone = shipping_phone
                 item.shipping_address = shipping_address
                 db.session.commit()
-                
-                # Generate QRs
-                # Wechat
-                qr = qrcode.QRCode(version=1, box_size=10, border=5)
-                # Mock Payment URL: weixin://wxpay/bizpayurl?pr=...
-                qr_data_wx = f"wxp://f2f09348JS888?oid={item.order_hash}&amt={item.current_price}"
-                qr.add_data(qr_data_wx)
-                qr.make(fit=True)
-                img = qr.make_image(fill='black', back_color='white')
-                buffered = BytesIO()
-                img.save(buffered, format="PNG")
-                wx_qr = base64.b64encode(buffered.getvalue()).decode()
-                
-                # Alipay
-                qr2 = qrcode.QRCode(version=1, box_size=10, border=5)
-                qr_data_ali = f"https://qr.alipay.com/bax093?oid={item.order_hash}&amt={item.current_price}"
-                qr2.add_data(qr_data_ali)
-                qr2.make(fit=True)
-                img2 = qr2.make_image(fill='black', back_color='white')
-                buffered2 = BytesIO()
-                img2.save(buffered2, format="PNG")
-                ali_qr = base64.b64encode(buffered2.getvalue()).decode()
-                
                 show_qr = True
             else:
                 flash('请填写所有地址信息')
 
-        return render_template('payment.html', item=item, show_qr=show_qr, wx_qr=wx_qr, ali_qr=ali_qr)
+        # 在模板中展示钱包支付信息，点击确认将调用 confirm_payment
+        user = User.query.get(current_user.id)
+        balance = Decimal(user.wallet_balance).quantize(Decimal('0.01'))
+        return render_template('payment.html', item=item, show_qr=show_qr, deposit_amount=deposit_amount, payable=payable, balance=balance)
 
     @app.route('/item/<int:item_id>/confirm_payment', methods=['POST'])
     @login_required
     def confirm_payment(item_id):
         item = Item.query.get_or_404(item_id)
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         if item.highest_bidder_id != current_user.id:
             return redirect(url_for('index'))
-            
+        if item.status != 'ended':
+            flash('拍卖尚未结束')
+            return redirect(url_for('item_detail', item_id=item_id))
+        if item.payment_status == 'paid':
+            flash('该订单已支付')
+            return redirect(url_for('item_detail', item_id=item_id))
+
+        # 计算应付金额 (应用保证金)
+        total = Decimal(item.current_price).quantize(Decimal('0.01'))
+        from models import Deposit
+        dep = Deposit.query.filter_by(item_id=item.id, user_id=current_user.id).filter(Deposit.status.in_(['frozen','applied'])).first()
+        deposit_amount = Decimal('0.00')
+        if dep:
+            deposit_amount = Decimal(dep.amount).quantize(Decimal('0.01'))
+        payable = (total - deposit_amount)
+        if payable < Decimal('0.00'):
+            payable = Decimal('0.00')
+
+        # 检查钱包余额
+        user = User.query.get(current_user.id)
+        balance = Decimal(user.wallet_balance).quantize(Decimal('0.01'))
+        if balance < payable:
+            flash('钱包余额不足，无法完成支付。请先充值。')
+            return redirect(url_for('wallet'))
+
+        # 扣除需支付金额，并标记保证金已使用
+        from models import WalletTransaction
+        new_balance = (balance - payable).quantize(Decimal('0.01'))
+        user.wallet_balance = new_balance
+        if dep and dep.status == 'frozen':
+            dep.status = 'applied'
         item.payment_status = 'paid'
+        # 为卖家入账成交总额（保证金 + 剩余款）
+        seller = item.seller
+        seller_balance = Decimal(seller.wallet_balance).quantize(Decimal('0.01'))
+        sale_total = Decimal(item.current_price).quantize(Decimal('0.01'))
+        seller_new_balance = (seller_balance + sale_total).quantize(Decimal('0.01'))
+        seller.wallet_balance = seller_new_balance
+
+        # 记录支付交易（买家）与入账交易（卖家）
+        db.session.add(WalletTransaction(
+            user_id=user.id,
+            item_id=item.id,
+            type='payment',
+            direction='debit',
+            amount=payable,
+            balance_after=new_balance,
+            description=f'支付订单：{item.order_hash}'
+        ))
+        db.session.add(WalletTransaction(
+            user_id=seller.id,
+            item_id=item.id,
+            type='payout',
+            direction='credit',
+            amount=sale_total,
+            balance_after=seller_new_balance,
+            description=f'出售拍品入账：{item.name}'
+        ))
         db.session.commit()
-        
+
         # Notify Seller
         send_system_message(item.id, item.seller_id, f"订单 {item.order_hash} 已付款。请尽快安排发货。收货人：{item.shipping_name}，地址：{item.shipping_address}")
-        
+
         flash('支付确认成功！')
         return redirect(url_for('item_detail', item_id=item_id))
 
@@ -719,6 +1057,9 @@ def register_views(app):
     @login_required
     def ship_item(item_id):
         item = Item.query.get_or_404(item_id)
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         
         # 验证权限：只有卖家能发货
         if item.seller_id != current_user.id:
@@ -748,6 +1089,9 @@ def register_views(app):
     @login_required
     def confirm_receipt(item_id):
         item = Item.query.get_or_404(item_id)
+        if not getattr(current_user, 'is_verified', False):
+            flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
+            return redirect(url_for('verify_identity'))
         
         # 验证权限：只有买家能收货
         if item.highest_bidder_id != current_user.id:
