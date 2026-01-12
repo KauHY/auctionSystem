@@ -80,9 +80,12 @@ def register_events(socketio):
             emit('error', {'msg': f'出价必须高于 {min_bid}'}, room=request.sid)
             return
 
-        # 防狙击: 只有在最后3分钟内出现第3次及以上出价时才延长
+        # 防狙击机制
         time_left = item.end_time - datetime.now()
         extended = False
+        strategy1_triggered = False
+
+        # 策略1: 最后3分钟内出现第3次及以上出价，自动延长5分钟
         if time_left < timedelta(minutes=3):
             # 统计当前截止时间前3分钟内的已有出价数量
             window_start = item.end_time - timedelta(minutes=3)
@@ -95,6 +98,12 @@ def register_events(socketio):
             if recent_bids_count + 1 >= 3:
                 item.end_time += timedelta(minutes=5)
                 extended = True
+                strategy1_triggered = True
+
+        # 策略2: 最后30秒内有人出价，自动延长3分钟 (仅当策略1未触发时)
+        if not strategy1_triggered and time_left < timedelta(seconds=30):
+            item.end_time += timedelta(minutes=3)
+            extended = True
 
         item.current_price = amount
         item.highest_bidder_id = current_user.id
