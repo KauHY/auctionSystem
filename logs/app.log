@@ -1,0 +1,19 @@
+2026-01-12 09:47:33,903 ERROR [app] 连接数据库失败或查询出错: (pymysql.err.OperationalError) (1054, "Unknown column 'users.email' in 'field list'")
+[SQL: SELECT users.id AS users_id, users.username AS users_username, users.password_hash AS users_password_hash, users.`role` AS users_role, users.phone AS users_phone, users.email AS users_email, users.avatar AS users_avatar, users.banned_until AS users_banned_until, users.real_name AS users_real_name, users.id_card AS users_id_card, users.is_verified AS users_is_verified, users.verified_at AS users_verified_at, users.wallet_balance AS users_wallet_balance, users.wallet_frozen AS users_wallet_frozen, users.created_at AS users_created_at 
+FROM users 
+WHERE users.username = %(username_1)s 
+ LIMIT %(param_1)s]
+[parameters: {'username_1': 'admin', 'param_1': 1}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2026-01-12 09:47:33,904 ERROR [app] 请检查 app.py 中的 SQLALCHEMY_DATABASE_URI配置，并确保MySQL服务已运行
+2026-01-12 09:47:39,756 ERROR [app] 连接数据库失败或查询出错: (pymysql.err.OperationalError) (1054, "Unknown column 'users.email' in 'field list'")
+[SQL: SELECT users.id AS users_id, users.username AS users_username, users.password_hash AS users_password_hash, users.`role` AS users_role, users.phone AS users_phone, users.email AS users_email, users.avatar AS users_avatar, users.banned_until AS users_banned_until, users.real_name AS users_real_name, users.id_card AS users_id_card, users.is_verified AS users_is_verified, users.verified_at AS users_verified_at, users.wallet_balance AS users_wallet_balance, users.wallet_frozen AS users_wallet_frozen, users.created_at AS users_created_at 
+FROM users 
+WHERE users.username = %(username_1)s 
+ LIMIT %(param_1)s]
+[parameters: {'username_1': 'admin', 'param_1': 1}]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2026-01-12 09:47:39,757 ERROR [app] 请检查 app.py 中的 SQLALCHEMY_DATABASE_URI配置，并确保MySQL服务已运行
+2026-01-12 09:47:43,773 INFO [app] 成功添加 email 字段
+2026-01-12 09:51:50,977 INFO [app] 成功删除 phone 字段
+2026-01-12 10:08:17,014 INFO [app] 成功添加 category 字段

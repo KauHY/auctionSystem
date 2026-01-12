@@ -31,6 +31,9 @@
     </div>
     <div class="col-md-6">
         <h2 id="item-name">{{ item.name }}</h2>
+        {% if item.category %}
+        <span class="badge bg-info text-dark mb-2">{{ item.category }}</span>
+        {% endif %}
         <div class="d-flex align-items-center mb-3">
             <span class="text-muted me-2">卖家:</span>
             <a href="{{ url_for('user_profile', user_id=item.seller.id) }}" class="d-flex align-items-center text-decoration-none">

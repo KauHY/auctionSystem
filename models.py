@@ -10,7 +10,7 @@ class User(UserMixin, db.Model):
     # schema.sql 中字段名为 password_hash
     password_hash = db.Column(db.String(128), nullable=False) 
     role = db.Column(db.String(20), nullable=False)
-    phone = db.Column(db.String(20), nullable=True) # 新增：联系电话
+    email = db.Column(db.String(120), nullable=True) # 新增：电子邮箱
     avatar = db.Column(db.String(200), nullable=True) # 新增：用户头像文件名
     banned_until = db.Column(db.DateTime, nullable=True) # 新增：封禁截止时间
     # 实名认证
@@ -31,6 +31,7 @@ class Item(db.Model):
     description = db.Column(db.Text, nullable=True)
     start_price = db.Column(db.Numeric(10, 2), nullable=False)
     current_price = db.Column(db.Numeric(10, 2), nullable=False)
+    category = db.Column(db.String(50), nullable=True) # 新增：商品分类标签
     increment = db.Column(db.Numeric(10, 2), default=Decimal('10.00'))
     start_time = db.Column(db.DateTime, default=datetime.now)
     end_time = db.Column(db.DateTime, nullable=False)

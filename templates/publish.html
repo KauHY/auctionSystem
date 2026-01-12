@@ -15,6 +15,17 @@
                         <label for="description" class="form-label">描述</label>
                         <textarea class="form-control" id="description" name="description" rows="3" required></textarea>
                     </div>
+                    
+                    <div class="mb-3">
+                        <label for="category" class="form-label">商品分类</label>
+                        <select class="form-select" id="category" name="category" required>
+                            <option value="">请选择分类...</option>
+                            {% for c in categories %}
+                            <option value="{{ c }}">{{ c }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <!-- 图片上传部分 -->
                     <div class="mb-3">
                         <label for="images" class="form-label">商品图片</label>

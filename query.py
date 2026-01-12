@@ -1,17 +1,20 @@
 from sqlalchemy import or_
 
-def get_index_items(Item, User, search_query=''):
+def get_index_items(Item, User, search_query='', category=None):
     """
     获首页所需的各类商品列表
     :param Item: Item 模型类
     :param User: User 模型类
     :param search_query: 搜索关键词
+    :param category: 分类筛选
     :return: (active_items, upcoming_items, ended_items)
     """
     
     # 基础查询构造器
     def get_base_query(status_list):
         q_obj = Item.query.filter(Item.status.in_(status_list))
+        if category:
+            q_obj = q_obj.filter(Item.category == category)
         if search_query:
             # 联表查询：匹配商品名 或 卖家用户名
             q_obj = q_obj.join(User, Item.seller_id == User.id).filter(

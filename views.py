@@ -95,19 +95,30 @@ def register_views(app):
     def index():
         try:
             search_q = request.args.get('q', '')
+            category = request.args.get('category', '')
             
             # 使用 query 模块获取数据，传入 Model 类以避免循环导入
-            active_items, upcoming_items, ended_items = query.get_index_items(Item, User, search_q)
+            active_items, upcoming_items, ended_items = query.get_index_items(Item, User, search_q, category)
             
             # 搜索卖家
             matched_sellers = query.get_search_users(User, search_q) if search_q else []
+
+            # 分类列表
+            categories = [
+                '二手数码产品', '宠物用品', '户外装备', '动漫潮玩 & 手办盲盒',
+                '健身器材', '生活日用品', '高价值收藏品', '摄影与电子设备',
+                '服饰鞋包', '美妆个护', '图书音像', '乐器设备',
+                '家居装饰', '母婴用品', '汽车/骑行周边', '虚拟物品/服务类'
+            ]
 
             return render_template('index.html', 
                                 active_items=active_items, 
                                 upcoming_items=upcoming_items, 
                                 ended_items=ended_items,
                                 matched_sellers=matched_sellers,
-                                search_query=search_q)
+                                search_query=search_q,
+                                current_category=category,
+                                categories=categories)
         except Exception as e:
             return f"<h3>数据库连接失败</h3><p>请检查 app.py 中的数据库密码配置。</p><p>错误详情: {e}</p>"
 
@@ -131,18 +142,23 @@ def register_views(app):
             username = request.form.get('username')
             password = request.form.get('password')
             confirm_password = request.form.get('confirm_password')
-            phone = request.form.get('phone') # 获取电话
+            email = request.form.get('email') # 获取邮箱
             role = request.form.get('role')
             
+            import re
+            email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+
             if password != confirm_password:
                 flash('两次输入的密码不一致')
+            elif email and not re.match(email_pattern, email):
+                flash('邮箱格式不正确')
             elif User.query.filter_by(username=username).first():
                 flash('用户名已存在')
             elif role not in ['buyer', 'seller']:
                 flash('无效的角色选择')
             else:
                 # 同样，这里存入 password_hash 字段的是明文，正式项目请加密
-                new_user = User(username=username, password_hash=password, role=role, phone=phone)
+                new_user = User(username=username, password_hash=password, role=role, email=email)
                 db.session.add(new_user)
                 db.session.commit()
                 login_user(new_user)
@@ -194,6 +210,14 @@ def register_views(app):
     @app.route('/publish', methods=['GET', 'POST'])
     @login_required
     def publish():
+        # 分类列表 (保持与 index 一致)
+        categories = [
+            '二手数码产品', '宠物用品', '户外装备', '动漫潮玩 & 手办盲盒',
+            '健身器材', '生活日用品', '高价值收藏品', '摄影与电子设备',
+            '服饰鞋包', '美妆个护', '图书音像', '乐器设备',
+            '家居装饰', '母婴用品', '汽车/骑行周边', '虚拟物品/服务类'
+        ]
+
         if current_user.role != 'seller':
             flash('只有卖家可以发布商品')
             return redirect(url_for('index'))
@@ -208,6 +232,7 @@ def register_views(app):
         if request.method == 'POST':
             name = request.form.get('name')
             description = request.form.get('description')
+            category = request.form.get('category') # 获取分类
             start_price_val = request.form.get('start_price')
             increment_val = request.form.get('increment', '10')
             duration_val = request.form.get('duration')
@@ -248,6 +273,7 @@ def register_views(app):
                 seller_id=current_user.id,
                 name=name,
                 description=description,
+                category=category, # 保存分类
                 start_price=start_price,
                 current_price=start_price,
                 increment=increment,
@@ -289,7 +315,7 @@ def register_views(app):
             flash('拍品已提交，等待管理员审核')
             return redirect(url_for('index'))
             
-        return render_template('publish.html')
+        return render_template('publish.html', categories=categories)
 
     @app.route('/my_auctions')
     @login_required

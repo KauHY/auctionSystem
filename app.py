@@ -49,6 +49,7 @@ def create_app():
     socketio.init_app(app, logger=True, engineio_logger=True)
     login_manager.init_app(app)
     login_manager.login_view = 'login'
+    login_manager.login_message = '请先登录以访问本系统'
     
     @login_manager.user_loader
     def load_user(user_id):
@@ -84,13 +85,29 @@ if __name__ == '__main__':
         except Exception as e:
             pass 
 
-        # 尝试自动迁移添加 phone 字段
+        # 尝试自动迁移添加 email 字段
         try:
-            db.session.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(20)"))
+            db.session.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(120)"))
             db.session.commit()
-            app.logger.info("成功添加 phone 字段")
+            app.logger.info("成功添加 email 字段")
         except Exception as e:
-            pass 
+            pass
+
+        # 尝试自动迁移删除 phone 字段
+        try:
+            db.session.execute(text("ALTER TABLE users DROP COLUMN phone"))
+            db.session.commit()
+            app.logger.info("成功删除 phone 字段")
+        except Exception as e:
+            pass
+
+        # 尝试自动迁移添加 category 字段
+        try:
+            db.session.execute(text("ALTER TABLE items ADD COLUMN category VARCHAR(50)"))
+            db.session.commit()
+            app.logger.info("成功添加 category 字段")
+        except Exception as e:
+            pass
 
         # 尝试自动迁移添加 avatar 字段
         try:
