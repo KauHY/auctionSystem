@@ -330,26 +330,54 @@ def register_views(app):
             if amount <= Decimal('0.00'):
                 flash('充值金额必须大于 0')
                 return redirect(url_for('wallet'))
-            user = User.query.get(current_user.id)
-            from models import WalletTransaction
-            new_balance = (Decimal(user.wallet_balance) + amount).quantize(Decimal('0.01'))
-            user.wallet_balance = new_balance
-            tx = WalletTransaction(
-                user_id=user.id,
-                type='recharge',
-                direction='credit',
-                amount=amount,
-                balance_after=new_balance,
-                description='用户充值'
-            )
-            db.session.add(tx)
-            db.session.commit()
-            flash('充值成功，余额已更新')
-            return redirect(url_for('wallet'))
+            
+            # 生成支付二维码
+            def generate_qr(data):
+                qr = qrcode.QRCode(version=1, box_size=10, border=4)
+                qr.add_data(data)
+                qr.make(fit=True)
+                img = qr.make_image(fill_color="black", back_color="white")
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+            order_no = f"RECHARGE{int(time.time())}{current_user.id}"
+            # 模拟支付链接
+            qr_wechat = generate_qr(f"wxp://f2f0/{order_no}?amt={amount}")
+            qr_alipay = generate_qr(f"https://qr.alipay.com/{order_no}?amt={amount}")
+            
+            return render_template('recharge_payment.html', amount=amount, qr_wechat=qr_wechat, qr_alipay=qr_alipay)
         # 列出最近交易
         from models import WalletTransaction
         txs = WalletTransaction.query.filter_by(user_id=current_user.id).order_by(WalletTransaction.created_at.desc()).limit(50).all()
         return render_template('wallet.html', balance=Decimal(current_user.wallet_balance), transactions=txs)
+
+    @app.route('/wallet/confirm_recharge', methods=['POST'])
+    @login_required
+    def confirm_recharge():
+        amount_str = request.form.get('amount', '0').strip()
+        try:
+            amount = Decimal(amount_str).quantize(Decimal('0.01'))
+        except Exception:
+             flash('支付异常')
+             return redirect(url_for('wallet'))
+        
+        user = User.query.get(current_user.id)
+        from models import WalletTransaction
+        new_balance = (Decimal(user.wallet_balance) + amount).quantize(Decimal('0.01'))
+        user.wallet_balance = new_balance
+        tx = WalletTransaction(
+            user_id=user.id,
+            type='recharge',
+            direction='credit',
+            amount=amount,
+            balance_after=new_balance,
+            description='用户充值'
+        )
+        db.session.add(tx)
+        db.session.commit()
+        flash(f'充值成功！已到账 ¥{amount}')
+        return redirect(url_for('wallet'))
 
     @app.route('/item/<int:item_id>')
     @login_required
@@ -1019,14 +1047,8 @@ def register_views(app):
         if dep and dep.status == 'frozen':
             dep.status = 'applied'
         item.payment_status = 'paid'
-        # 为卖家入账成交总额（保证金 + 剩余款）
-        seller = item.seller
-        seller_balance = Decimal(seller.wallet_balance).quantize(Decimal('0.01'))
-        sale_total = Decimal(item.current_price).quantize(Decimal('0.01'))
-        seller_new_balance = (seller_balance + sale_total).quantize(Decimal('0.01'))
-        seller.wallet_balance = seller_new_balance
 
-        # 记录支付交易（买家）与入账交易（卖家）
+        # 记录支付交易（买家）
         db.session.add(WalletTransaction(
             user_id=user.id,
             item_id=item.id,
@@ -1035,15 +1057,6 @@ def register_views(app):
             amount=payable,
             balance_after=new_balance,
             description=f'支付订单：{item.order_hash}'
-        ))
-        db.session.add(WalletTransaction(
-            user_id=seller.id,
-            item_id=item.id,
-            type='payout',
-            direction='credit',
-            amount=sale_total,
-            balance_after=seller_new_balance,
-            description=f'出售拍品入账：{item.name}'
         ))
         db.session.commit()
 
@@ -1103,10 +1116,29 @@ def register_views(app):
             return redirect(url_for('my_orders'))
             
         item.shipping_status = 'received'
+        
+        # 为卖家入账成交总额
+        seller = item.seller
+        seller_balance = Decimal(seller.wallet_balance).quantize(Decimal('0.01'))
+        sale_total = Decimal(item.current_price).quantize(Decimal('0.01'))
+        seller_new_balance = (seller_balance + sale_total).quantize(Decimal('0.01'))
+        seller.wallet_balance = seller_new_balance
+
+        from models import WalletTransaction
+        db.session.add(WalletTransaction(
+            user_id=seller.id,
+            item_id=item.id,
+            type='payout',
+            direction='credit',
+            amount=sale_total,
+            balance_after=seller_new_balance,
+            description=f'出售拍品入账：{item.name}'
+        ))
+
         db.session.commit()
         
         # 通知卖家
-        send_system_message(item.id, item.seller_id, f"买家已确认收货，订单 {item.order_hash} 完成。")
+        send_system_message(item.id, item.seller_id, f"买家已确认收货，订单 {item.order_hash} 完成。资金已转入您的钱包。")
         
         flash('确认收货成功')
         return redirect(url_for('my_orders'))

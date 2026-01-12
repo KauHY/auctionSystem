@@ -27,7 +27,7 @@ def create_app():
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max-limit
     
     # --- 数据库配置 (请根据实际情况修改) ---
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:12345@localhost/Auction'
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456@localhost/Auction'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # 日志目录与文件
