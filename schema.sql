@@ -1,13 +1,12 @@
 -- 在线拍卖系统 SQL 脚本 (MySQL 兼容)
--- 如果使用 SQLite，部分语法(如 AUTO_INCREMENT, ENGINE)可能需要调整
--- 现在MySQL中建立一个auction数据库
 
+-- Users Table
 CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(80) NOT NULL UNIQUE,
     password_hash VARCHAR(128) NOT NULL,
     role VARCHAR(20) NOT NULL, -- 'buyer', 'seller', 'admin'
-    phone VARCHAR(20),
+    email VARCHAR(120),
     avatar VARCHAR(200),
     banned_until DATETIME,
     real_name VARCHAR(80),
@@ -19,6 +18,7 @@ CREATE TABLE users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Items Table
 CREATE TABLE items (
     id INT AUTO_INCREMENT PRIMARY KEY,
     seller_id INT NOT NULL,
@@ -29,7 +29,8 @@ CREATE TABLE items (
     increment DECIMAL(10, 2) DEFAULT 10.00,
     start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     end_time DATETIME NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'ended', 'approved'
+    status VARCHAR(20) DEFAULT 'pending', -- 'pending', 'active', 'rejected', 'ended', 'approved', 'stopped'
+    category VARCHAR(50),
     rejection_reason VARCHAR(255),
     appeal_reason TEXT,
     appeal_status VARCHAR(20), -- 'pending', 'resolved', 'rejected'
@@ -49,6 +50,7 @@ CREATE TABLE items (
     INDEX idx_end_time (end_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Bids Table
 CREATE TABLE bids (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT NOT NULL,
@@ -61,6 +63,7 @@ CREATE TABLE bids (
     INDEX idx_item_id (item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Item Images Table
 CREATE TABLE item_images (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT NOT NULL,
@@ -70,6 +73,7 @@ CREATE TABLE item_images (
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Posts Table (Forum)
 CREATE TABLE posts (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -78,6 +82,7 @@ CREATE TABLE posts (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Chat Sessions Table
 CREATE TABLE chat_sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT NOT NULL,
@@ -93,6 +98,7 @@ CREATE TABLE chat_sessions (
     FOREIGN KEY (seller_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Messages Table
 CREATE TABLE messages (
     id INT AUTO_INCREMENT PRIMARY KEY,
     chat_session_id INT NOT NULL,
@@ -104,6 +110,7 @@ CREATE TABLE messages (
     FOREIGN KEY (sender_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Appeals Table
 CREATE TABLE appeals (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT NOT NULL,
@@ -119,7 +126,7 @@ CREATE TABLE appeals (
     FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 保证金记录
+-- Deposits Table
 CREATE TABLE deposits (
     id INT AUTO_INCREMENT PRIMARY KEY,
     item_id INT NOT NULL,
@@ -134,7 +141,7 @@ CREATE TABLE deposits (
     INDEX idx_item_user (item_id, user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 资金明细记录
+-- Wallet Transactions Table
 CREATE TABLE wallet_transactions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
@@ -150,4 +157,15 @@ CREATE TABLE wallet_transactions (
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE SET NULL,
     INDEX idx_user_created (user_id, created_at),
     INDEX idx_type_created (type, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Favorites Table
+CREATE TABLE favorites (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    item_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_user_item (user_id, item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
