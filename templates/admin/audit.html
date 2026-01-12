@@ -36,7 +36,7 @@
                     <td>{{ item.seller.username }}</td>
                     <td>{{ item.description[:20] }}...</td>
                     <td>¥{{ item.start_price }}</td>
-                    <td><span class="badge bg-warning text-dark">{{ item.status }}</span></td>
+                    <td><span class="badge bg-warning text-dark">{{ item.status | localize }}</span></td>
                     <td>
                         <form action="{{ url_for('approve_item_action', item_id=item.id) }}" method="POST" class="d-inline">
                             <button type="submit" class="btn btn-success btn-sm">通过</button>

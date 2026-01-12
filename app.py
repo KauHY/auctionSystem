@@ -54,6 +54,54 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    # --- 注册全站通用过滤器 (Localization) ---
+    @app.template_filter('localize')
+    def localize_filter(value):
+        if not value:
+            return ""
+        translations = {
+            # 角色
+            'buyer': '买家',
+            'seller': '卖家',
+            'admin': '管理员',
+            
+            # 物品状态
+            'pending': '待审核',
+            'approved': '即将开始',
+            'active': '进行中',
+            'ended': '已结束',
+            'rejected': '已驳回',
+            'stopped': '强制下架',
+            
+            # 支付状态
+            'unpaid': '未支付',
+            'paid': '已支付',
+            'timeout_cancelled': '超时取消',
+            
+            # 物流状态
+            'unshipped': '待发货',
+            'shipped': '已发货',
+            'received': '已收货',
+
+            # 申诉状态
+            'resolved': '已解决',
+            
+            # 钱包/交易类型
+            'credit': '入账',
+            'debit': '扣款',
+            'recharge': '充值',
+            'deposit': '保证金',
+            'refund': '退款',
+            'payment': '支付货款',
+            'forfeit': '罚没/扣除',
+            'payout': '货款结算',
+            'frozen': '冻结',
+            'applied': '已应用',
+            'refunded': '已退还',
+            'forfeited': '已罚没'
+        }
+        return translations.get(str(value), value)
         
     register_views(app)
     register_chat_routes(app)
