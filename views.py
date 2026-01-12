@@ -96,9 +96,10 @@ def register_views(app):
         try:
             search_q = request.args.get('q', '')
             category = request.args.get('category', '')
+            sort = request.args.get('sort', 'default')
             
             # 使用 query 模块获取数据，传入 Model 类以避免循环导入
-            active_items, upcoming_items, ended_items = query.get_index_items(Item, User, search_q, category)
+            active_items, upcoming_items, ended_items = query.get_index_items(Item, User, search_q, category, sort)
             
             # 搜索卖家
             matched_sellers = query.get_search_users(User, search_q) if search_q else []
@@ -110,6 +111,17 @@ def register_views(app):
                 '服饰鞋包', '美妆个护', '图书音像', '乐器设备',
                 '家居装饰', '母婴用品', '汽车/骑行周边', '虚拟物品/服务类'
             ]
+            
+            # 排序选项
+            sort_options = [
+                {'value': 'default', 'label': '默认排序'},
+                {'value': 'start_time_desc', 'label': '最新上架'},
+                {'value': 'end_time_asc', 'label': '即将截止'},
+                {'value': 'price_asc', 'label': '当前价格 (低→高)'},
+                {'value': 'price_desc', 'label': '当前价格 (高→低)'},
+                {'value': 'start_price_asc', 'label': '起拍价 (低→高)'},
+                {'value': 'start_price_desc', 'label': '起拍价 (高→低)'},
+            ]
 
             return render_template('index.html', 
                                 active_items=active_items, 
@@ -118,7 +130,9 @@ def register_views(app):
                                 matched_sellers=matched_sellers,
                                 search_query=search_q,
                                 current_category=category,
-                                categories=categories)
+                                categories=categories,
+                                current_sort=sort,
+                                sort_options=sort_options)
         except Exception as e:
             return f"<h3>数据库连接失败</h3><p>请检查 app.py 中的数据库密码配置。</p><p>错误详情: {e}</p>"
 

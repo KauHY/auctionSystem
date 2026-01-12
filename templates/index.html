@@ -26,10 +26,16 @@
             <div class="input-group">
                 <input type="search" class="form-control" name="q" placeholder="搜索商品名称或卖家..." aria-label="Search" value="{{ search_query }}">
                 
-                <select class="form-select" name="category" style="max-width: 200px; background-color: #f8f9fa;" onchange="this.form.submit()">
+                <select class="form-select" name="category" style="max-width: 180px; background-color: #f8f9fa;" onchange="this.form.submit()">
                     <option value="">全部分类</option>
                     {% for c in categories %}
                     <option value="{{ c }}" {% if c == current_category %}selected{% endif %}>{{ c }}</option>
+                    {% endfor %}
+                </select>
+
+                <select class="form-select border-start-0" name="sort" style="max-width: 160px; background-color: #f8f9fa;" onchange="this.form.submit()">
+                    {% for opt in sort_options %}
+                    <option value="{{ opt.value }}" {% if opt.value == current_sort %}selected{% endif %}>{{ opt.label }}</option>
                     {% endfor %}
                 </select>
                 
@@ -37,7 +43,7 @@
                     <i class="bi bi-search"></i> 搜索
                 </button>
                 
-                {% if search_query or current_category %}
+                {% if search_query or current_category or current_sort != 'default' %}
                 <a href="{{ url_for('index') }}" class="btn btn-outline-secondary" title="清除所有筛选">重置</a>
                 {% endif %}
             </div>

@@ -1,12 +1,13 @@
 from sqlalchemy import or_
 
-def get_index_items(Item, User, search_query='', category=None):
+def get_index_items(Item, User, search_query='', category=None, sort_option='default'):
     """
     获首页所需的各类商品列表
     :param Item: Item 模型类
     :param User: User 模型类
     :param search_query: 搜索关键词
     :param category: 分类筛选
+    :param sort_option: 排序选项
     :return: (active_items, upcoming_items, ended_items)
     """
     
@@ -22,12 +23,37 @@ def get_index_items(Item, User, search_query='', category=None):
             )
         return q_obj
 
-    # 分类获取不同状态的拍卖物品
-    active_items = get_base_query(['active']).order_by(Item.end_time).all()
-    upcoming_items = get_base_query(['approved']).order_by(Item.start_time).all()
+    # 排序逻辑应用器
+    def apply_sort(query_obj, default_sort):
+        if sort_option == 'start_time_desc': # 上架时间 (最新)
+            return query_obj.order_by(Item.start_time.desc())
+        elif sort_option == 'end_time_asc': # 截止时间 (最近)
+            return query_obj.order_by(Item.end_time.asc())
+        elif sort_option == 'end_time_desc': # 截止时间 (最远)
+            return query_obj.order_by(Item.end_time.desc())
+        elif sort_option == 'price_asc': # 价格 (低到高) - 对active/ended是current_price, upcoming是start_price
+            return query_obj.order_by(Item.current_price.asc())
+        elif sort_option == 'price_desc': # 价格 (高到低)
+            return query_obj.order_by(Item.current_price.desc())
+        elif sort_option == 'start_price_asc': # 起拍价 (低到高)
+            return query_obj.order_by(Item.start_price.asc())
+        elif sort_option == 'start_price_desc': # 起拍价 (高到低)
+            return query_obj.order_by(Item.start_price.desc())
+        return default_sort(query_obj)
+
+    # 默认排序定义
+    # Active: 默认按结束时间升序 (快结束的在前)
+    active_query = get_base_query(['active'])
+    active_items = apply_sort(active_query, lambda q: q.order_by(Item.end_time)).all()
+
+    # Upcoming: 默认按开始时间升序 (快开始的在前)
+    # 起拍价排序对 Upcoming 也有效
+    upcoming_query = get_base_query(['approved'])
+    upcoming_items = apply_sort(upcoming_query, lambda q: q.order_by(Item.start_time)).all()
     
-    ended_query = get_base_query(['ended']).order_by(Item.end_time.desc())
-    ended_items = ended_query.limit(12).all()
+    # Ended: 默认按结束时间降序 (刚结束的在前)
+    ended_query = get_base_query(['ended'])
+    ended_items = apply_sort(ended_query, lambda q: q.order_by(Item.end_time.desc())).limit(12).all()
     
     return active_items, upcoming_items, ended_items
 
