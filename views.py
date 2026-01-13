@@ -67,6 +67,7 @@ def register_views(app):
                 'payment': '订单支付',
                 'forfeit': '保证金没收',
                 'payout': '卖家入账',
+                'withdrawal': '余额提现',
             }
             return mapping.get(t, t or '')
 
@@ -417,6 +418,66 @@ def register_views(app):
         db.session.add(tx)
         db.session.commit()
         flash(f'充值成功！已到账 ¥{amount}')
+        return redirect(url_for('wallet'))
+
+    @app.route('/wallet/withdraw', methods=['POST'])
+    @login_required
+    def withdraw():
+        amount_str = request.form.get('amount', '0').strip()
+        method = request.form.get('method')
+        
+        # 数据验证（虽然不存库，但需要确保用户填了）
+        account_info = ""
+        if method in ['wechat', 'alipay']:
+            phone = request.form.get('phone_number')
+            if not phone:
+                flash('请输入手机号')
+                return redirect(url_for('wallet'))
+            method_cn = "微信" if method == 'wechat' else "支付宝"
+            account_info = f"提现到{method_cn}"
+        elif method == 'bank':
+            card = request.form.get('bank_card')
+            if not card:
+                 flash('请输入银行卡号')
+                 return redirect(url_for('wallet'))
+            account_info = "提现到银行卡"
+        else:
+            flash('未知的提现方式')
+            return redirect(url_for('wallet'))
+
+        try:
+            amount = Decimal(amount_str).quantize(Decimal('0.01'))
+        except Exception:
+             flash('提现金额格式不正确')
+             return redirect(url_for('wallet'))
+        
+        if amount <= 0:
+            flash('提现金额必须大于0')
+            return redirect(url_for('wallet'))
+
+        user = User.query.get(current_user.id)
+        current_balance = Decimal(user.wallet_balance)
+
+        if amount > current_balance:
+            flash(f'余额不足，当前仅有 ¥{current_balance}')
+            return redirect(url_for('wallet'))
+
+        from models import WalletTransaction
+        new_balance = (current_balance - amount).quantize(Decimal('0.01'))
+        user.wallet_balance = new_balance
+        
+        tx = WalletTransaction(
+            user_id=user.id,
+            type='withdrawal',
+            direction='debit',  # 扣款
+            amount=amount,
+            balance_after=new_balance,
+            description=account_info
+        )
+        db.session.add(tx)
+        db.session.commit()
+        
+        flash(f'提现申请已提交，资金将会在24小时内到账。')
         return redirect(url_for('wallet'))
 
     @app.route('/item/<int:item_id>')

@@ -18,10 +18,89 @@
         <div class="col-auto">
           <button type="submit" class="btn btn-primary">立即充值</button>
         </div>
+        <div class="col-auto">
+          <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#withdrawModal">
+            <i class="bi bi-cash-coin"></i> 提现
+          </button>
+        </div>
       </form>
       <p class="text-muted mt-3">提示：本系统为演示环境，充值直接生效。</p>
     </div>
   </div>
+
+  <!-- 提现模态框 -->
+  <div class="modal fade" id="withdrawModal" tabindex="-1" aria-labelledby="withdrawModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="withdrawModalLabel">余额提现</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form action="{{ url_for('withdraw') }}" method="POST">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="withdrawAmount" class="form-label">提现金额 (¥)</label>
+              <div class="input-group">
+                <span class="input-group-text">¥</span>
+                <input type="number" class="form-control" id="withdrawAmount" name="amount" step="0.01" min="0.01" max="{{ balance }}" required placeholder="最多可提现 {{ balance }}">
+              </div>
+              <div class="form-text">当前账户余额: ¥{{ balance }}</div>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">提现方式</label>
+              <div class="btn-group w-100" role="group" aria-label="提现方式选择">
+                <input type="radio" class="btn-check" name="method" id="method-wechat" value="wechat" checked onchange="toggleAccountInput()">
+                <label class="btn btn-outline-success" for="method-wechat"><i class="bi bi-wechat"></i> 微信</label>
+
+                <input type="radio" class="btn-check" name="method" id="method-alipay" value="alipay" onchange="toggleAccountInput()">
+                <label class="btn btn-outline-primary" for="method-alipay"><i class="bi bi-alipay"></i> 支付宝</label>
+
+                <input type="radio" class="btn-check" name="method" id="method-bank" value="bank" onchange="toggleAccountInput()">
+                <label class="btn btn-outline-secondary" for="method-bank"><i class="bi bi-credit-card"></i> 银行卡</label>
+              </div>
+            </div>
+
+            <div class="mb-3" id="input-group-phone">
+              <label for="accountPhone" class="form-label">手机号码</label>
+              <input type="tel" class="form-control" id="accountPhone" name="phone_number" placeholder="请输入对应账号绑定的手机号">
+            </div>
+
+            <div class="mb-3 d-none" id="input-group-bank">
+              <label for="accountBank" class="form-label">银行卡号</label>
+              <input type="text" class="form-control" id="accountBank" name="bank_card" placeholder="请输入银行卡号">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="submit" class="btn btn-danger">确认提现</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleAccountInput() {
+      const method = document.querySelector('input[name="method"]:checked').value;
+      const phoneGroup = document.getElementById('input-group-phone');
+      const bankGroup = document.getElementById('input-group-bank');
+      const phoneInput = document.getElementById('accountPhone');
+      const bankInput = document.getElementById('accountBank');
+
+      if (method === 'bank') {
+        phoneGroup.classList.add('d-none');
+        bankGroup.classList.remove('d-none');
+        phoneInput.required = false;
+        bankInput.required = true;
+      } else {
+        phoneGroup.classList.remove('d-none');
+        bankGroup.classList.add('d-none');
+        phoneInput.required = true;
+        bankInput.required = false;
+      }
+    }
+  </script>
 
     <div class="card mt-4">
       <div class="card-body">
