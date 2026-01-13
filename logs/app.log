@@ -20,3 +20,5 @@ WHERE users.username = %(username_1)s
 2026-01-12 11:05:49,717 INFO [app] 成功添加 shipping_extended_count 字段
 2026-01-12 11:05:49,744 INFO [app] 成功添加 paid_at 字段
 2026-01-12 11:05:49,790 INFO [app] 成功添加 shipped_at 字段
+2026-01-13 09:11:22,473 INFO [app] 检测到数据库中没有管理员，已自动创建: admin / 123
+2026-01-13 09:56:49,746 INFO [app] 检测到数据库中没有管理员，已自动创建: admin / 123

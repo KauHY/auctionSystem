@@ -128,3 +128,15 @@ def get_appeal_list(Appeal):
     pending_appeals = [a for a in all_appeals if a.status == 'pending']
     history_appeals = [a for a in all_appeals if a.status != 'pending']
     return pending_appeals, history_appeals
+
+def get_search_users(User, search_query):
+    """
+    搜索卖家
+    :param User: User 模型类
+    :param search_query: 搜索关键词
+    """
+    return User.query.filter(
+        User.role == 'seller',
+        User.username.like(f'%{search_query}%')
+    ).all()
+

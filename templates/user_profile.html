@@ -17,6 +17,9 @@
                 <p class="text-muted">
                     <span class="badge {{ 'bg-primary' if user.role == 'seller' else 'bg-info' }}">{{ user.role | localize }}</span>
                 </p>
+                {% if user.email %}
+                <p class="card-text"><i class="bi bi-envelope"></i> {{ user.email }}</p>
+                {% endif %}
                 {% if user.phone %}
                 <p class="card-text"><i class="bi bi-telephone"></i> {{ user.phone }}</p>
                 {% endif %}
