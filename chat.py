@@ -15,11 +15,41 @@ def register_chat_routes(app):
             flash('您尚未完成实名认证。<a href="' + url_for('verify_identity') + '" class="btn btn-sm btn-primary ms-2">现在去实名</a> <button type="button" class="btn btn-sm btn-secondary ms-2" data-bs-dismiss="alert">明白了，稍后再去</button>')
             return redirect(url_for('verify_identity'))
         # 获取我参与的所有会话，按时间倒序
-        sessions = ChatSession.query.filter(
+        all_sessions = ChatSession.query.filter(
             or_(ChatSession.buyer_id == current_user.id, ChatSession.seller_id == current_user.id)
         ).order_by(ChatSession.updated_at.desc()).all()
         
-        return render_template('inbox.html', sessions=sessions)
+        # 分类会话
+        admin_sessions = []
+        trade_sessions = []
+        
+        # 统计未读数量
+        admin_unread_total = 0
+        trade_unread_total = 0
+
+        for session in all_sessions:
+            # 判断当前用户在会话中的角色，确定对方是谁
+            is_buyer = (current_user.id == session.buyer_id)
+            if is_buyer:
+                other_user = session.seller
+                unread_count = session.buyer_unread
+            else:
+                other_user = session.buyer
+                unread_count = session.seller_unread
+            
+            # 根据对方角色进行分类
+            if other_user.role == 'admin':
+                admin_sessions.append(session)
+                admin_unread_total += unread_count
+            else:
+                trade_sessions.append(session)
+                trade_unread_total += unread_count
+        
+        return render_template('inbox.html', 
+                             admin_sessions=admin_sessions, 
+                             trade_sessions=trade_sessions,
+                             admin_unread_total=admin_unread_total,
+                             trade_unread_total=trade_unread_total)
 
     @app.route('/chat/<int:item_id>/<int:other_user_id>')
     @login_required

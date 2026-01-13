@@ -1,50 +1,92 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% macro render_session_list(sessions_list) %}
+<div class="list-group shadow-sm">
+    {% for session in sessions_list %}
+        {% set is_buyer = (current_user.id == session.buyer_id) %}
+        {% set other_user = session.seller if is_buyer else session.buyer %}
+        {% set unread_count = session.buyer_unread if is_buyer else session.seller_unread %}
+        
+        <a href="{{ url_for('start_chat', item_id=session.item_id, other_user_id=other_user.id) }}" class="list-group-item list-group-item-action p-3" aria-current="true">
+            <div class="d-flex w-100 justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    {% if other_user.avatar %}
+                    <img src="{{ url_for('static', filename='uploads/' + other_user.avatar) }}" class="rounded-circle me-3 border" style="width: 48px; height: 48px; object-fit: cover;">
+                    {% else %}
+                    <div class="rounded-circle me-3 d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 48px; height: 48px;">
+                        <i class="bi bi-person list-group-img"></i>
+                    </div>
+                    {% endif %}
+                    
+                    <div>
+                        <h5 class="mb-1">
+                            {{ other_user.username }}
+                            {% if unread_count > 0 %}
+                            <span class="badge bg-danger rounded-pill ms-2">{{ unread_count }}</span>
+                            {% endif %}
+                        </h5>
+                        <p class="mb-1 text-muted text-truncate" style="max-width: 400px;">
+                            关于: {{ session.item.name }} | {{ session.last_message or '无预览' }}
+                        </p>
+                    </div>
+                </div>
+                <small class="text-muted">{{ session.updated_at.strftime('%m-%d %H:%M') }}</small>
+            </div>
+        </a>
+    {% else %}
+        <div class="list-group-item text-center py-5">
+            <i class="bi bi-chat-square-text text-muted mb-3" style="font-size: 3rem;"></i>
+            <p class="text-muted">暂时没有消息</p>
+        </div>
+    {% endfor %}
+</div>
+{% endmacro %}
+
 <div class="row">
     <div class="col-md-10 offset-md-1">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1><i class="bi bi-inbox"></i> 对话列表</h1>
         </div>
         
-        <div class="list-group shadow-sm">
-            {% for session in sessions %}
-                {% set is_buyer = (current_user.id == session.buyer_id) %}
-                {% set other_user = session.seller if is_buyer else session.buyer %}
-                {% set unread_count = session.buyer_unread if is_buyer else session.seller_unread %}
-                
-                <a href="{{ url_for('start_chat', item_id=session.item_id, other_user_id=other_user.id) }}" class="list-group-item list-group-item-action p-3" aria-current="true">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            {% if other_user.avatar %}
-                            <img src="{{ url_for('static', filename='uploads/' + other_user.avatar) }}" class="rounded-circle me-3 border" style="width: 48px; height: 48px; object-fit: cover;">
-                            {% else %}
-                            <div class="rounded-circle me-3 d-flex align-items-center justify-content-center bg-secondary text-white" style="width: 48px; height: 48px;">
-                                <i class="bi bi-person list-group-img"></i>
-                            </div>
-                            {% endif %}
-                            
-                            <div>
-                                <h5 class="mb-1">
-                                    {{ other_user.username }}
-                                    {% if unread_count > 0 %}
-                                    <span class="badge bg-danger rounded-pill ms-2">{{ unread_count }}</span>
-                                    {% endif %}
-                                </h5>
-                                <p class="mb-1 text-muted text-truncate" style="max-width: 400px;">
-                                    关于: {{ session.item.name }} | {{ session.last_message or '无预览' }}
-                                </p>
-                            </div>
-                        </div>
-                        <small class="text-muted">{{ session.updated_at.strftime('%m-%d %H:%M') }}</small>
-                    </div>
-                </a>
-            {% else %}
-                <div class="list-group-item text-center py-5">
-                    <i class="bi bi-chat-square-textDisplay-1 text-muted mb-3" style="font-size: 3rem;"></i>
-                    <p class="text-muted">暂时没有消息</p>
-                </div>
-            {% endfor %}
+        <ul class="nav nav-tabs mb-3" id="inboxTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active position-relative me-3" id="trade-tab" data-bs-toggle="tab" data-bs-target="#trade" type="button" role="tab" aria-controls="trade" aria-selected="true">
+                    {% if current_user.role == 'buyer' %}
+                        卖家对话
+                    {% elif current_user.role == 'seller' %}
+                        买家对话
+                    {% else %}
+                        交易对话
+                    {% endif %}
+                    {% if trade_unread_total > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        {{ trade_unread_total if trade_unread_total <= 99 else '...' }}
+                        <span class="visually-hidden">unread messages</span>
+                    </span>
+                    {% endif %}
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link position-relative me-3" id="admin-tab" data-bs-toggle="tab" data-bs-target="#admin" type="button" role="tab" aria-controls="admin" aria-selected="false">
+                    系统通知
+                    {% if admin_unread_total > 0 %}
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        {{ admin_unread_total if admin_unread_total <= 99 else '...' }}
+                        <span class="visually-hidden">unread messages</span>
+                    </span>
+                    {% endif %}
+                </button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="inboxTabsContent">
+            <div class="tab-pane fade show active" id="trade" role="tabpanel" aria-labelledby="trade-tab">
+                {{ render_session_list(trade_sessions) }}
+            </div>
+            <div class="tab-pane fade" id="admin" role="tabpanel" aria-labelledby="admin-tab">
+                {{ render_session_list(admin_sessions) }}
+            </div>
         </div>
     </div>
 </div>
