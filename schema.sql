@@ -170,5 +170,8 @@ CREATE TABLE favorites (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_favorite (user_id, item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE,
     UNIQUE KEY unique_user_item (user_id, item_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
