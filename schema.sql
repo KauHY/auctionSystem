@@ -37,8 +37,11 @@ CREATE TABLE items (
     highest_bidder_id INT,
     order_hash VARCHAR(64),
     payment_status VARCHAR(20) DEFAULT 'unpaid',
+    paid_at DATETIME,
     tracking_number VARCHAR(100),
     shipping_status VARCHAR(20) DEFAULT 'unshipped', -- 'unshipped', 'shipped', 'received'
+    shipped_at DATETIME,
+    shipping_extended_count INT DEFAULT 0,
     shipping_name VARCHAR(80),
     shipping_phone VARCHAR(20),
     shipping_address VARCHAR(255),
